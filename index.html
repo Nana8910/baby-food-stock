@@ -1,57 +1,93 @@
 <!DOCTYPE html>
 <html lang="ja">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>離乳食管理アプリ</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>りにゅうしょく ストック</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="app-header">
-      <h1>🍼 離乳食管理</h1>
-      <p class="subtitle">食べた食材と反応を記録しましょう</p>
-    </header>
+    <div class="wrap">
+      <header>
+        <div class="title round">
+          <svg class="leaf" viewBox="0 0 24 24" fill="none">
+            <path d="M4 20C4 11 11 4 20 4c0 9-7 16-16 16Z" fill="#5AA24E" />
+            <path d="M5 19C9 14 14 10 18 8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          りにゅうしょく ストック
+        </div>
+        <div class="date" id="today"></div>
+      </header>
 
-    <main class="container">
-      <section class="card">
-        <h2>記録を追加</h2>
-        <form id="record-form" novalidate>
-          <div class="field">
-            <label for="food">食材名</label>
-            <input type="text" id="food" name="food" placeholder="例：にんじん" autocomplete="off" />
-          </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-stock" aria-selected="true" data-tab="stock">在庫</button>
+        <button class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">あげたきろく</button>
+      </div>
 
-          <div class="field">
-            <label for="date">日付</label>
-            <input type="date" id="date" name="date" />
-          </div>
+      <div id="view-stock"></div>
+      <div id="view-log" hidden></div>
+    </div>
 
-          <div class="field">
-            <label for="reaction">反応</label>
-            <select id="reaction" name="reaction">
-              <option value="ok">食べられた</option>
-              <option value="watch">様子見</option>
-              <option value="ng">合わなかった</option>
-            </select>
-          </div>
+    <div class="actions">
+      <div class="inner">
+        <button class="btn btn-make" id="makeBtn">＋ つくる</button>
+        <button class="btn btn-serve" id="serveBtn">🥄 あげる</button>
+      </div>
+    </div>
 
-          <div class="field">
-            <label for="memo">メモ（任意）</label>
-            <input type="text" id="memo" name="memo" placeholder="例：少量から開始" autocomplete="off" />
-          </div>
+    <!-- make sheet -->
+    <div class="scrim" id="makeScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="ストックをつくる">
+        <div class="grab"></div>
+        <h2>ストックをつくる</h2>
+        <label>やさい</label>
+        <div class="picks" id="makePicks"></div>
+        <input id="makeCustom" placeholder="または じぶんで入力（例：かぼちゃ）" style="margin-top: 10px" />
+        <label>つくった数</label>
+        <div class="stepper">
+          <button data-step="makeQty" data-dir="-1" aria-label="へらす">−</button>
+          <input id="makeQty" type="number" value="8" min="1" inputmode="numeric" />
+          <button data-step="makeQty" data-dir="1" aria-label="ふやす">＋</button>
+        </div>
+        <label>ほぞん方法</label>
+        <div class="seg" id="makeStore">
+          <button aria-pressed="true" data-v="冷蔵">冷蔵（れいぞう）</button>
+          <button aria-pressed="false" data-v="冷凍">冷凍（れいとう）</button>
+        </div>
+        <label>つくった日</label>
+        <input id="makeDate" type="date" />
+        <button class="save" id="makeSave">ストックに追加</button>
+        <p class="note">
+          めやす：冷蔵は2日くらい、冷凍は1週間くらいで使い切りましょう。鮮度は「つくった日」をもとに表示されます。最終的なあげる・あげないの判断はご自身でお願いします。
+        </p>
+      </div>
+    </div>
 
-          <p id="form-error" class="error" role="alert" hidden></p>
-          <button type="submit">追加する</button>
-        </form>
-      </section>
+    <!-- serve sheet -->
+    <div class="scrim" id="serveScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="あげる">
+        <div class="grab"></div>
+        <h2>きょう あげた分</h2>
+        <label>いつ あげた？</label>
+        <div class="seg" id="serveSlot">
+          <button data-v="朝" aria-pressed="false">🌅 朝</button>
+          <button data-v="昼" aria-pressed="false">🌞 昼</button>
+          <button data-v="晩" aria-pressed="false">🌙 晩</button>
+        </div>
+        <label style="margin-top: 18px">やさい</label>
+        <div id="serveList"></div>
+        <button class="save" id="serveSave" disabled>きろくする</button>
+        <p class="note">古いストックから自動でへらします（先に作った分から使います）。</p>
+      </div>
+    </div>
 
-      <section class="card">
-        <h2>記録一覧</h2>
-        <p id="summary" class="summary"></p>
-        <ul id="record-list" class="record-list"></ul>
-        <p id="empty-message" class="empty">まだ記録がありません。</p>
-      </section>
-    </main>
+    <div class="toast" id="toast"></div>
 
     <script src="src/logic.js"></script>
     <script src="src/app.js"></script>

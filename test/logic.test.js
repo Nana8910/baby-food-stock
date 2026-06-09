@@ -4,66 +4,112 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const BabyFood = require('../src/logic.js');
 
-const seq = () => {
-  let n = 0;
-  return () => `id-${++n}`;
-};
+// テストの基準日（決定的にするため固定）
+const NOW = '2026-06-09T10:00:00';
 
-test('validateInput: 正しい入力ではエラーなし', () => {
-  const errors = BabyFood.validateInput({ food: 'にんじん', date: '2026-06-09', reaction: 'ok' });
-  assert.deepEqual(errors, []);
+const batch = (over) => ({
+  id: 'x',
+  veg: 'にんじん',
+  qty: 1,
+  made: '2026-06-09',
+  store: '冷蔵',
+  ...over,
 });
 
-test('validateInput: 欠けている項目を検出する', () => {
-  const errors = BabyFood.validateInput({ food: '  ', date: '', reaction: 'maybe' });
-  assert.equal(errors.length, 3);
+test('daysSince: 日付の差を日数で返す', () => {
+  assert.equal(BabyFood.daysSince('2026-06-09', NOW), 0);
+  assert.equal(BabyFood.daysSince('2026-06-08', NOW), 1);
+  assert.equal(BabyFood.daysSince('2026-06-02', NOW), 7);
 });
 
-test('createRecord: 入力をトリムして記録を作る', () => {
-  const record = BabyFood.createRecord(
-    { food: '  かぼちゃ ', date: '2026-06-09', reaction: 'watch', memo: '  少量  ' },
-    seq()
-  );
-  assert.equal(record.food, 'かぼちゃ');
-  assert.equal(record.memo, '少量');
-  assert.equal(record.id, 'id-1');
+test('freshness: 冷蔵は2日まで、超えると期限すぎ', () => {
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-09', store: '冷蔵' }), NOW).txt, 'つくりたて');
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-08', store: '冷蔵' }), NOW).txt, '早めに');
+  const old = BabyFood.freshness(batch({ made: '2026-06-06', store: '冷蔵' }), NOW);
+  assert.equal(old.txt, '期限すぎ');
+  assert.equal(old.alert, true);
 });
 
-test('createRecord: 不正な入力では例外を投げる', () => {
-  assert.throws(() => BabyFood.createRecord({ food: '', date: '', reaction: 'ok' }));
+test('freshness: 冷凍は7日まで持つ', () => {
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-06', store: '冷凍' }), NOW).txt, '新しい'); // 3日
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-04', store: '冷凍' }), NOW).txt, '早めに'); // 5日
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-01', store: '冷凍' }), NOW).alert, true); // 8日
 });
 
-test('addRecord / removeRecord は元の配列を変更しない', () => {
-  const r1 = BabyFood.createRecord({ food: 'おかゆ', date: '2026-06-01', reaction: 'ok' }, seq());
-  const base = [];
-  const added = BabyFood.addRecord(base, r1);
-  assert.equal(base.length, 0);
-  assert.equal(added.length, 1);
-
-  const removed = BabyFood.removeRecord(added, r1.id);
-  assert.equal(added.length, 1);
-  assert.equal(removed.length, 0);
+test('madeLabel: 今日 / 昨日 / N日前', () => {
+  assert.equal(BabyFood.madeLabel('2026-06-09', NOW), '今日');
+  assert.equal(BabyFood.madeLabel('2026-06-08', NOW), '昨日');
+  assert.equal(BabyFood.madeLabel('2026-06-04', NOW), '5日前');
 });
 
-test('sortByDateDesc: 日付の新しい順に並べる', () => {
-  const records = [
-    { id: 'a', food: 'A', date: '2026-06-01', reaction: 'ok', memo: '' },
-    { id: 'b', food: 'B', date: '2026-06-09', reaction: 'ok', memo: '' },
-    { id: 'c', food: 'C', date: '2026-06-05', reaction: 'ok', memo: '' },
+test('groupBatches: 野菜ごとに、在庫切れを除き、古い順でまとめる', () => {
+  const batches = [
+    batch({ id: 'a', veg: 'にんじん', made: '2026-06-08' }),
+    batch({ id: 'b', veg: 'にんじん', made: '2026-06-05' }),
+    batch({ id: 'c', veg: 'かぼちゃ', made: '2026-06-09' }),
+    batch({ id: 'd', veg: 'にんじん', made: '2026-06-09', qty: 0 }), // 在庫切れ
   ];
-  const sorted = BabyFood.sortByDateDesc(records);
-  assert.deepEqual(
-    sorted.map((r) => r.id),
-    ['b', 'c', 'a']
-  );
+  const g = BabyFood.groupBatches(batches);
+  assert.deepEqual(Object.keys(g).sort(), ['かぼちゃ', 'にんじん']);
+  assert.deepEqual(g['にんじん'].map((b) => b.id), ['b', 'a']); // 古い順
 });
 
-test('summarize: 反応ごとに集計する', () => {
-  const records = [
-    { reaction: 'ok' },
-    { reaction: 'ok' },
-    { reaction: 'ng' },
-    { reaction: 'watch' },
+test('summarize: 種類・合計・期限すぎを集計する', () => {
+  const batches = [
+    batch({ veg: 'にんじん', qty: 3, made: '2026-06-09', store: '冷蔵' }),
+    batch({ veg: 'かぼちゃ', qty: 2, made: '2026-06-01', store: '冷蔵' }), // 期限すぎ
+    batch({ veg: 'にんじん', qty: 0, made: '2026-06-09' }), // 在庫切れは除外
   ];
-  assert.deepEqual(BabyFood.summarize(records), { ok: 2, watch: 1, ng: 1, total: 4 });
+  assert.deepEqual(BabyFood.summarize(batches, NOW), { types: 2, total: 5, alert: 1 });
+});
+
+test('deductFIFO: 古いストックから先に引き、元配列は変えない', () => {
+  const batches = [
+    batch({ id: 'new', veg: 'にんじん', qty: 5, made: '2026-06-09' }),
+    batch({ id: 'old', veg: 'にんじん', qty: 3, made: '2026-06-05' }),
+  ];
+  const next = BabyFood.deductFIFO(batches, [{ veg: 'にんじん', qty: 4 }]);
+  // 古い old(3) を使い切り、残り1を new から
+  assert.equal(next.find((b) => b.id === 'old').qty, 0);
+  assert.equal(next.find((b) => b.id === 'new').qty, 4);
+  // 元配列は不変
+  assert.equal(batches.find((b) => b.id === 'old').qty, 3);
+});
+
+test('restoreToStock: 取り消し分を一番新しいストックに戻す', () => {
+  const batches = [
+    batch({ id: 'new', veg: 'にんじん', qty: 1, made: '2026-06-09' }),
+    batch({ id: 'old', veg: 'にんじん', qty: 0, made: '2026-06-05' }),
+  ];
+  const next = BabyFood.restoreToStock(batches, [{ veg: 'にんじん', qty: 2 }]);
+  assert.equal(next.find((b) => b.id === 'new').qty, 3);
+});
+
+test('restoreToStock: 戻し先が無ければ新規ストックを作る', () => {
+  const next = BabyFood.restoreToStock(
+    [],
+    [{ veg: 'ほうれん草', qty: 2 }],
+    { uid: () => 'gen', today: '2026-06-09' }
+  );
+  assert.equal(next.length, 1);
+  assert.deepEqual(next[0], { id: 'gen', veg: 'ほうれん草', qty: 2, made: '2026-06-09', store: '冷蔵' });
+});
+
+test('slotFromHour: 時刻から朝昼晩を決める', () => {
+  assert.equal(BabyFood.slotFromHour(7), '朝');
+  assert.equal(BabyFood.slotFromHour(12), '昼');
+  assert.equal(BabyFood.slotFromHour(19), '晩');
+  assert.equal(BabyFood.slotFromHour(2), '晩');
+});
+
+test('mergeItems: 同じ野菜の数量をまとめ、初出順を保つ', () => {
+  const merged = BabyFood.mergeItems([
+    { veg: 'にんじん', qty: 2 },
+    { veg: 'おかゆ', qty: 1 },
+    { veg: 'にんじん', qty: 1 },
+  ]);
+  assert.deepEqual(merged, [
+    { veg: 'にんじん', qty: 3 },
+    { veg: 'おかゆ', qty: 1 },
+  ]);
 });
