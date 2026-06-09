@@ -1,0 +1,10 @@
+{
+  "name": "baby-food-manager",
+  "version": "0.1.0",
+  "description": "赤ちゃんが食べた離乳食を記録するシンプルなアプリ",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

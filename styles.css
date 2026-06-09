@@ -1,0 +1,191 @@
+:root {
+  --bg: #fff7f2;
+  --card: #ffffff;
+  --accent: #ff9a76;
+  --accent-dark: #e8794f;
+  --text: #3b3a39;
+  --muted: #8a8785;
+  --ok: #4caf50;
+  --watch: #f4b400;
+  --ng: #e57373;
+  --border: #f0e3da;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.app-header {
+  text-align: center;
+  padding: 1.5rem 1rem 0.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.container {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.field {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+select {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #fffdfc;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button {
+  width: 100%;
+  padding: 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+button:hover {
+  background: var(--accent-dark);
+}
+
+.error {
+  color: var(--ng);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.summary {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.badge.ok {
+  background: var(--ok);
+}
+.badge.watch {
+  background: var(--watch);
+}
+.badge.ng {
+  background: var(--ng);
+}
+
+.record-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-food {
+  font-weight: 600;
+}
+
+.record-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.record-memo {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.delete-btn {
+  width: auto;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  padding: 0.2rem 0.4rem;
+}
+
+.delete-btn:hover {
+  background: transparent;
+  color: var(--ng);
+}
+
+.empty {
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.9rem;
+}

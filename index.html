@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>離乳食管理アプリ</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>🍼 離乳食管理</h1>
+      <p class="subtitle">食べた食材と反応を記録しましょう</p>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>記録を追加</h2>
+        <form id="record-form" novalidate>
+          <div class="field">
+            <label for="food">食材名</label>
+            <input type="text" id="food" name="food" placeholder="例：にんじん" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="date">日付</label>
+            <input type="date" id="date" name="date" />
+          </div>
+
+          <div class="field">
+            <label for="reaction">反応</label>
+            <select id="reaction" name="reaction">
+              <option value="ok">食べられた</option>
+              <option value="watch">様子見</option>
+              <option value="ng">合わなかった</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="memo">メモ（任意）</label>
+            <input type="text" id="memo" name="memo" placeholder="例：少量から開始" autocomplete="off" />
+          </div>
+
+          <p id="form-error" class="error" role="alert" hidden></p>
+          <button type="submit">追加する</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>記録一覧</h2>
+        <p id="summary" class="summary"></p>
+        <ul id="record-list" class="record-list"></ul>
+        <p id="empty-message" class="empty">まだ記録がありません。</p>
+      </section>
+    </main>
+
+    <script src="src/logic.js"></script>
+    <script src="src/app.js"></script>
+  </body>
+</html>
