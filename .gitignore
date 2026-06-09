@@ -1,0 +1,17 @@
+# 依存パッケージ
+node_modules/
+
+# ログ・一時ファイル
+*.log
+npm-debug.log*
+.cache/
+tmp/
+
+# OS が生成するファイル
+.DS_Store
+Thumbs.db
+
+# エディタ設定
+.vscode/
+.idea/
+*.swp
