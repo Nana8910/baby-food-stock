@@ -235,6 +235,80 @@ header {
   color: var(--danger);
 }
 
+/* ingredient card actions */
+.add-ing {
+  width: 100%;
+  border: 1.5px dashed var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 15px;
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+.add-ing:active {
+  transform: translateY(1px);
+}
+.veg-actions {
+  border-top: 1px dashed var(--line);
+  display: flex;
+}
+.veg-actions button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 12px;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.veg-actions button.make {
+  color: var(--leaf-dark);
+}
+.veg-actions button.del:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.veg-actions button:hover {
+  background: var(--surface-soft);
+}
+.veg-actions button + button {
+  border-left: 1px dashed var(--line);
+}
+
+/* category headings (stock / serve) */
+.cat-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 16px;
+  margin: 20px 2px 11px;
+  color: var(--ink);
+}
+.cat-h:first-of-type {
+  margin-top: 4px;
+}
+.cat-h .ic {
+  font-size: 18px;
+}
+.cat-h .cnt {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 11px;
+}
+
 /* history */
 .day {
   margin-bottom: 16px;
@@ -277,6 +351,15 @@ header {
   gap: 10px;
   flex-wrap: wrap;
 }
+.meal .time {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--leaf-dark);
+  background: var(--leaf-soft);
+  padding: 3px 9px;
+  border-radius: 8px;
+}
 .pill {
   font-size: 12.5px;
   font-weight: 500;
@@ -291,6 +374,137 @@ header {
   height: 8px;
   border-radius: 3px;
   display: inline-block;
+}
+.pill.miss {
+  background: transparent;
+  border: 1.4px dashed var(--line);
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-family: "M PLUS Rounded 1c";
+}
+
+/* おすすめ献立 */
+.rec-title {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 18px;
+  margin: 2px 2px;
+}
+.rec-sub {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  margin: 0 2px 14px;
+  line-height: 1.6;
+}
+.rec-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.seg-rec {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.seg-rec button {
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.seg-rec button[aria-pressed="true"] {
+  border-color: var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+}
+.rec-count {
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+.rec-count b {
+  font-size: 16px;
+}
+.rec-day {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 14px 2px 8px;
+}
+.rec-meal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.rec-no {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 9px;
+  flex: none;
+}
+.rec-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rec-note {
+  color: var(--ink-soft);
+  font-size: 12px;
+  background: var(--surface-soft);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 11px 14px;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+.rec-blank {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.rec-blank-h {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+.rec-template {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rec-template .pill {
+  font-size: 13.5px;
+  padding: 7px 13px;
 }
 .meal .undo {
   margin-left: auto;
@@ -460,6 +674,15 @@ select:focus,
   background: var(--leaf-soft);
   color: var(--leaf-dark);
 }
+.seg-cat {
+  flex-wrap: wrap;
+}
+.seg-cat button {
+  flex: 1 1 22%;
+  min-width: 72px;
+  padding: 10px 6px;
+  font-size: 13px;
+}
 .picks {
   display: flex;
   flex-wrap: wrap;
@@ -518,6 +741,24 @@ select:focus,
   font-weight: 800;
   font-size: 18px;
   padding: 0;
+}
+.step-unit {
+  padding: 0 14px 0 4px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.unit-sel {
+  border: 0;
+  border-left: 1.5px solid var(--line);
+  border-radius: 0;
+  width: auto;
+  font-size: 15px;
+  padding: 0 10px;
+  background: var(--surface-soft);
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
 }
 .serve-row {
   background: var(--surface);

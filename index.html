@@ -26,12 +26,17 @@
       </header>
 
       <div class="tabs" role="tablist">
-        <button class="tab" role="tab" id="tab-stock" aria-selected="true" data-tab="stock">在庫</button>
+        <button class="tab" role="tab" id="tab-ingredients" aria-selected="true" data-tab="ingredients">食材</button>
+        <button class="tab" role="tab" id="tab-stock" aria-selected="false" data-tab="stock">在庫</button>
         <button class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">あげたきろく</button>
       </div>
 
-      <div id="view-stock"></div>
-      <div id="view-log" hidden></div>
+      <div id="view-ingredients"></div>
+      <div id="view-stock" hidden></div>
+      <div id="view-log" hidden>
+        <div id="recommendBox"></div>
+        <div id="historyBox"></div>
+      </div>
     </div>
 
     <div class="actions">
@@ -46,14 +51,27 @@
       <div class="sheet" role="dialog" aria-modal="true" aria-label="ストックをつくる">
         <div class="grab"></div>
         <h2>ストックをつくる</h2>
-        <label>やさい</label>
+        <label>カテゴリ</label>
+        <div class="seg seg-cat" id="makeCat"></div>
+        <label>どれから作る？</label>
         <div class="picks" id="makePicks"></div>
-        <input id="makeCustom" placeholder="または じぶんで入力（例：かぼちゃ）" style="margin-top: 10px" />
-        <label>つくった数</label>
+        <input id="makeCustom" placeholder="リストにないものは ここに入力" style="margin-top: 10px" />
+        <div id="makeUse" hidden>
+          <label>この食材を使った量</label>
+          <div class="stepper">
+            <button data-step="makeUseQty" data-dir="-1" aria-label="へらす">−</button>
+            <input id="makeUseQty" type="number" value="1" min="0" inputmode="numeric" />
+            <button data-step="makeUseQty" data-dir="1" aria-label="ふやす">＋</button>
+            <span id="makeUseUnit" class="step-unit"></span>
+          </div>
+          <p class="note" id="makeUseHint" style="margin-top: 6px"></p>
+        </div>
+        <label>できたストックの数</label>
         <div class="stepper">
           <button data-step="makeQty" data-dir="-1" aria-label="へらす">−</button>
           <input id="makeQty" type="number" value="8" min="1" inputmode="numeric" />
           <button data-step="makeQty" data-dir="1" aria-label="ふやす">＋</button>
+          <span class="step-unit">個</span>
         </div>
         <label>ほぞん方法</label>
         <div class="seg" id="makeStore">
@@ -66,6 +84,37 @@
         <p class="note">
           めやす：冷蔵は2日くらい、冷凍は1週間くらいで使い切りましょう。鮮度は「つくった日」をもとに表示されます。最終的なあげる・あげないの判断はご自身でお願いします。
         </p>
+      </div>
+    </div>
+
+    <!-- ingredient sheet -->
+    <div class="scrim" id="ingScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="食材">
+        <div class="grab"></div>
+        <h2 id="ingTitle">野菜の食材を追加</h2>
+        <label>野菜の名前</label>
+        <div class="picks" id="ingPicks"></div>
+        <input id="ingName" placeholder="または じぶんで入力（例：かぶ）" style="margin-top: 10px" />
+        <label>数・量</label>
+        <div class="stepper">
+          <button data-step="ingQty" data-dir="-1" aria-label="へらす">−</button>
+          <input id="ingQty" type="number" value="1" min="0" inputmode="numeric" />
+          <button data-step="ingQty" data-dir="1" aria-label="ふやす">＋</button>
+          <select id="ingUnit" class="unit-sel" aria-label="単位">
+            <option>本</option><option>個</option><option>株</option><option>束</option>
+            <option>袋</option><option>パック</option><option>g</option><option>その他</option>
+          </select>
+        </div>
+        <label>ほぞん場所</label>
+        <div class="seg" id="ingStore">
+          <button aria-pressed="true" data-v="冷蔵">冷蔵</button>
+          <button aria-pressed="false" data-v="冷凍">冷凍</button>
+          <button aria-pressed="false" data-v="常温">常温</button>
+        </div>
+        <label>使い切りたい日（任意）</label>
+        <input id="ingExpire" type="date" />
+        <button class="save" id="ingSave">保存する</button>
+        <p class="note">「使い切りたい日」を入れると、残り日数と期限の色が表示されます。</p>
       </div>
     </div>
 

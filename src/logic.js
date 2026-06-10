@@ -6,8 +6,9 @@
  *
  * ブラウザでは window.BabyFood として、Node では require() で読み込める。
  *
- * batch（ストック1回分）: { id, veg, qty, made, store }   made は "YYYY-MM-DD"
- * meal （あげた記録）   : { id, ts, slot, items: [{ veg, qty }] }
+ * ingredient（冷蔵庫の生食材）: { id, name, qty, unit, store, bought, expire, cat }
+ * batch（ストック1回分）      : { id, veg, qty, made, store, cat }   made は "YYYY-MM-DD"
+ * meal （あげた記録）         : { id, ts, slot, items: [{ veg, qty }] }
  */
 (function (root, factory) {
   const api = factory();
@@ -18,6 +19,31 @@
   }
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
+
+  /** 食材のカテゴリ（表示順）。 */
+  const CATS = [
+    { key: '野菜', icon: '🥕' },
+    { key: 'タンパク質', icon: '🍗' },
+    { key: 'ごはん', icon: '🍚' },
+  ];
+
+  /** カテゴリごとのプリセット候補。 */
+  const PRESETS_BY_CAT = {
+    野菜: ['にんじん', 'ブロッコリー', 'じゃがいも', 'かぼちゃ', 'ほうれん草', 'トマト', 'だいこん', 'たまねぎ'],
+    タンパク質: ['鶏ささみ', '鶏むね肉', '鶏ひき肉', 'おやき', 'とうふ', '白身魚', 'しらす', 'ツナ', '卵', '納豆'],
+    ごはん: ['10倍がゆ', '7倍がゆ', '5倍がゆ', '軟飯', 'ごはん', 'パンがゆ', 'うどん'],
+  };
+
+  /** 名前 → カテゴリの逆引き表。 */
+  const CAT_OF_NAME = {};
+  for (const c of CATS) {
+    for (const n of PRESETS_BY_CAT[c.key] || []) CAT_OF_NAME[n] = c.key;
+  }
+
+  /** 名前からカテゴリを推定する（不明は「野菜」）。 */
+  function catOfName(name) {
+    return CAT_OF_NAME[name] || '野菜';
+  }
 
   /** 保存方法ごとの鮮度しきい値（日数）。 */
   const STORE_LIMITS = {
@@ -30,12 +56,21 @@
     return new Date(iso + 'T00:00:00');
   }
 
-  /** made からの経過日数（日付単位）。now 省略時は現在時刻。 */
-  function daysSince(madeISO, now) {
+  /** now（省略時は現在時刻）を 0 時に丸めた Date。 */
+  function baseDay(now) {
     const base = now ? new Date(now) : new Date();
     base.setHours(0, 0, 0, 0);
-    const made = atMidnight(madeISO);
-    return Math.round((base - made) / 86400000);
+    return base;
+  }
+
+  /** made からの経過日数（日付単位）。now 省略時は現在時刻。 */
+  function daysSince(madeISO, now) {
+    return Math.round((baseDay(now) - atMidnight(madeISO)) / 86400000);
+  }
+
+  /** 指定日まであと何日か（過去なら負）。now 省略時は現在時刻。 */
+  function daysUntil(targetISO, now) {
+    return Math.round((atMidnight(targetISO) - baseDay(now)) / 86400000);
   }
 
   /** ストックの鮮度を判定する。{ cls, txt, alert } を返す。 */
@@ -45,6 +80,16 @@
     if (d > limit) return { cls: 'b-old', txt: '期限すぎ', alert: true };
     if (d >= soon) return { cls: 'b-soon', txt: '早めに', alert: false };
     return { cls: 'b-fresh', txt: d <= 0 ? 'つくりたて' : '新しい', alert: false };
+  }
+
+  /** 生食材の鮮度（使い切りたい日が基準）。expire 未設定なら null。 */
+  function ingFreshness(ing, now) {
+    if (!ing.expire) return null;
+    const d = daysUntil(ing.expire, now);
+    if (d < 0) return { cls: 'b-old', txt: `期限すぎ${-d}日`, alert: true };
+    if (d === 0) return { cls: 'b-soon', txt: '今日まで', alert: true };
+    if (d <= 2) return { cls: 'b-soon', txt: `あと${d}日`, alert: false };
+    return { cls: 'b-fresh', txt: `あと${d}日`, alert: false };
   }
 
   /** 「今日 / 昨日 / N日前」の表示。 */
@@ -130,7 +175,14 @@
       if (arr.length > 0) {
         arr[0].qty += item.qty;
       } else {
-        next.push({ id: uid(), veg: item.veg, qty: item.qty, made: today, store: '冷蔵' });
+        next.push({
+          id: uid(),
+          veg: item.veg,
+          qty: item.qty,
+          made: today,
+          store: '冷蔵',
+          cat: catOfName(item.veg),
+        });
       }
     }
     return next;
@@ -161,10 +213,91 @@
     return order.map((veg) => ({ veg, qty: map[veg] }));
   }
 
+  /**
+   * 在庫をカテゴリごとの「使える分」プールにする。
+   * 冷蔵を先に、同じ保存方法なら古い順（先に使う）で並べる。
+   * 各要素: { veg, store, made, n }（n は残り個数）
+   */
+  function buildPools(batches) {
+    const pools = { 野菜: [], タンパク質: [], ごはん: [] };
+    for (const b of batches) {
+      if (b.qty <= 0) continue;
+      const cat = b.cat || catOfName(b.veg);
+      (pools[cat] = pools[cat] || []).push({ veg: b.veg, store: b.store, made: b.made, n: b.qty });
+    }
+    for (const k in pools) {
+      pools[k].sort(
+        (a, b) => (a.store === '冷蔵' ? 0 : 1) - (b.store === '冷蔵' ? 0 : 1) || a.made.localeCompare(b.made)
+      );
+    }
+    return pools;
+  }
+
+  /** プールから1つ取り出す（取り出した要素を返し、無ければ null）。 */
+  function takeOne(pool, avoidHard, avoidSoft) {
+    if (!pool) return null;
+    avoidHard = avoidHard || [];
+    avoidSoft = avoidSoft || [];
+    // 1) 同じ食事で未使用 かつ 前の食事と違うものを優先
+    let i = pool.findIndex((e) => e.n > 0 && !avoidHard.includes(e.veg) && !avoidSoft.includes(e.veg));
+    // 2) なければ 同じ食事で未使用ならOK（前の食事と同じでも可）
+    if (i < 0) i = pool.findIndex((e) => e.n > 0 && !avoidHard.includes(e.veg));
+    if (i < 0) return null;
+    pool[i].n--;
+    return pool[i];
+  }
+
+  /**
+   * いまの在庫から、これからのおすすめ献立（ごはん1＋タンパク質1＋野菜数品）を組む。
+   * 毎食なるべく違う組み合わせにする。元の batches は変更しない。
+   * options: { perDay=2, maxDays=4, vegPerMeal=3 }
+   * 返り値: { days: [[{rice,protein,veg:[]}]], ranOut, total, hasStock }
+   */
+  function planMenus(batches, options) {
+    const opts = options || {};
+    const per = opts.perDay || 2;
+    const maxDays = opts.maxDays || 4;
+    const vegPerMeal = opts.vegPerMeal || 3;
+    const pools = buildPools(batches);
+    const days = [];
+    let ranOut = false;
+    let prev = { rice: null, protein: null, veg: [] };
+    for (let d = 0; d < maxDays && !ranOut; d++) {
+      const meals = [];
+      for (let m = 0; m < per; m++) {
+        const rice = takeOne(pools['ごはん'], [], prev.rice ? [prev.rice] : []);
+        const protein = takeOne(pools['タンパク質'], [], prev.protein ? [prev.protein] : []);
+        const veg = [];
+        const used = [];
+        for (let k = 0; k < vegPerMeal; k++) {
+          const pick = takeOne(pools['野菜'], used, prev.veg);
+          if (!pick) break;
+          veg.push(pick);
+          used.push(pick.veg);
+        }
+        if (!rice && !protein && !veg.length) {
+          ranOut = true;
+          break;
+        }
+        meals.push({ rice, protein, veg });
+        prev = { rice: rice ? rice.veg : null, protein: protein ? protein.veg : null, veg: veg.map((v) => v.veg) };
+      }
+      if (meals.length) days.push(meals);
+    }
+    const total = days.reduce((s, m) => s + m.length, 0);
+    return { days, ranOut, total, hasStock: batches.some((b) => b.qty > 0) };
+  }
+
   return {
+    CATS,
+    PRESETS_BY_CAT,
+    CAT_OF_NAME,
+    catOfName,
     STORE_LIMITS,
     daysSince,
+    daysUntil,
     freshness,
+    ingFreshness,
     madeLabel,
     groupBatches,
     summarize,
@@ -173,5 +306,7 @@
     restoreToStock,
     slotFromHour,
     mergeItems,
+    buildPools,
+    planMenus,
   };
 });

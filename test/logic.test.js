@@ -113,3 +113,62 @@ test('mergeItems: 同じ野菜の数量をまとめ、初出順を保つ', () =>
     { veg: 'おかゆ', qty: 1 },
   ]);
 });
+
+test('catOfName: 名前からカテゴリを推定（不明は野菜）', () => {
+  assert.equal(BabyFood.catOfName('にんじん'), '野菜');
+  assert.equal(BabyFood.catOfName('鶏ささみ'), 'タンパク質');
+  assert.equal(BabyFood.catOfName('5倍がゆ'), 'ごはん');
+  assert.equal(BabyFood.catOfName('未知の食材'), '野菜');
+});
+
+test('daysUntil: 指定日まであと何日か（過去は負）', () => {
+  assert.equal(BabyFood.daysUntil('2026-06-09', NOW), 0);
+  assert.equal(BabyFood.daysUntil('2026-06-11', NOW), 2);
+  assert.equal(BabyFood.daysUntil('2026-06-07', NOW), -2);
+});
+
+test('ingFreshness: 使い切りたい日から残り日数を判定', () => {
+  assert.equal(BabyFood.ingFreshness({ expire: '' }, NOW), null);
+  assert.deepEqual(BabyFood.ingFreshness({ expire: '2026-06-09' }, NOW), { cls: 'b-soon', txt: '今日まで', alert: true });
+  assert.deepEqual(BabyFood.ingFreshness({ expire: '2026-06-07' }, NOW), { cls: 'b-old', txt: '期限すぎ2日', alert: true });
+  assert.deepEqual(BabyFood.ingFreshness({ expire: '2026-06-10' }, NOW), { cls: 'b-soon', txt: 'あと1日', alert: false });
+  assert.deepEqual(BabyFood.ingFreshness({ expire: '2026-06-14' }, NOW), { cls: 'b-fresh', txt: 'あと5日', alert: false });
+});
+
+test('buildPools: カテゴリ別に分け、冷蔵→古い順に並べる', () => {
+  const batches = [
+    { id: '1', veg: 'にんじん', qty: 2, made: '2026-06-08', store: '冷凍', cat: '野菜' },
+    { id: '2', veg: 'ブロッコリー', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { id: '3', veg: '鶏ささみ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+    { id: '4', veg: 'からっぽ', qty: 0, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  const pools = BabyFood.buildPools(batches);
+  assert.deepEqual(pools['野菜'].map((e) => e.veg), ['ブロッコリー', 'にんじん']); // 冷蔵が先
+  assert.equal(pools['タンパク質'].length, 1);
+  assert.equal(pools['ごはん'].length, 0);
+});
+
+test('planMenus: 在庫1食分から1食だけ献立を作り、在庫切れを示す', () => {
+  const batches = [
+    { id: 'r', veg: '5倍がゆ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { id: 'p', veg: '鶏ささみ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+    { id: 'v', veg: 'にんじん', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  const r = BabyFood.planMenus(batches, { perDay: 1 });
+  assert.equal(r.hasStock, true);
+  assert.equal(r.total, 1);
+  assert.equal(r.ranOut, true);
+  assert.equal(r.days.length, 1);
+  const meal = r.days[0][0];
+  assert.equal(meal.rice.veg, '5倍がゆ');
+  assert.equal(meal.protein.veg, '鶏ささみ');
+  assert.deepEqual(meal.veg.map((v) => v.veg), ['にんじん']);
+  // 元の在庫は変更されない
+  assert.equal(batches[0].qty, 1);
+});
+
+test('planMenus: 在庫が無ければ hasStock=false', () => {
+  const r = BabyFood.planMenus([], { perDay: 2 });
+  assert.equal(r.hasStock, false);
+  assert.equal(r.total, 0);
+});
