@@ -30,6 +30,20 @@
   /* ---------- 状態 ---------- */
   let state = { ingredients: [], batches: [], meals: [], settings: { recPerDay: 2 } };
   let recPerDay = 2;
+  let remote = null; // 共有バックエンド（src/sync.js から接続後にセット）
+
+  // 不足フィールドの補完・旧データの移行。読み込み元（ローカル/クラウド）に依らず通す。
+  function normalize(s) {
+    s = s || {};
+    s.ingredients = s.ingredients || [];
+    s.batches = s.batches || [];
+    s.meals = s.meals || [];
+    s.settings = s.settings || {};
+    if (!s.settings.recPerDay) s.settings.recPerDay = 2;
+    s.batches.forEach((b) => { if (!b.cat) b.cat = catOfName(b.veg); });
+    s.ingredients.forEach((i) => { if (!i.cat) i.cat = '野菜'; });
+    return s;
+  }
 
   function load() {
     try {
@@ -38,27 +52,22 @@
     } catch (e) {
       /* 壊れていれば初期状態のまま */
     }
-    state.ingredients = state.ingredients || [];
-    state.batches = state.batches || [];
-    state.meals = state.meals || [];
-    state.settings = state.settings || {};
-    if (!state.settings.recPerDay) state.settings.recPerDay = 2;
+    state = normalize(state);
     recPerDay = state.settings.recPerDay;
-    // 旧データの移行：カテゴリが無いものは名前から推定する。
-    state.batches.forEach((b) => {
-      if (!b.cat) b.cat = catOfName(b.veg);
-    });
-    state.ingredients.forEach((i) => {
-      if (!i.cat) i.cat = '野菜';
-    });
   }
 
-  function save() {
+  function persistLocal() {
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
     } catch (e) {
       /* 保存できない環境ではそのまま続行 */
     }
+  }
+
+  // ローカルへ即保存し、共有に接続済みならクラウドへも反映する。
+  function save() {
+    persistLocal();
+    if (remote && remote.write) remote.write(state);
   }
 
   const uid = () => Math.random().toString(36).slice(2, 10);
@@ -712,6 +721,25 @@
       if (e.key === 'Escape') document.querySelectorAll('.scrim.on').forEach((s) => hide(s.id));
     });
   }
+
+  /* ---------- 共有バックエンドとの接続点（src/sync.js が利用） ---------- */
+  window.BabyFoodApp = {
+    // クラウドへ流す現在の状態。
+    snapshot() {
+      return state;
+    },
+    // クラウド側の状態を取り込んで再描画する。
+    applyRemote(incoming) {
+      state = normalize(incoming);
+      recPerDay = state.settings.recPerDay;
+      persistLocal();
+      renderAll();
+    },
+    // 共有バックエンドを接続/切断する（null で切断＝以後ローカルのみ）。
+    connect(remoteApi) {
+      remote = remoteApi;
+    },
+  };
 
   /* ---------- 起動 ---------- */
   function boot() {

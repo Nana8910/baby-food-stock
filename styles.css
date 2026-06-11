@@ -41,6 +41,27 @@ body {
 
 header {
   padding: 26px 0 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.share-chip {
+  flex: none;
+  margin-top: 4px;
+  border: 1.5px solid var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.share-chip:active {
+  transform: translateY(1px);
 }
 .title {
   font-family: "M PLUS Rounded 1c";

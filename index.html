@@ -15,14 +15,17 @@
   <body>
     <div class="wrap">
       <header>
-        <div class="title round">
-          <svg class="leaf" viewBox="0 0 24 24" fill="none">
-            <path d="M4 20C4 11 11 4 20 4c0 9-7 16-16 16Z" fill="#5AA24E" />
-            <path d="M5 19C9 14 14 10 18 8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-          りにゅうしょく ストック
+        <div class="head-main">
+          <div class="title round">
+            <svg class="leaf" viewBox="0 0 24 24" fill="none">
+              <path d="M4 20C4 11 11 4 20 4c0 9-7 16-16 16Z" fill="#5AA24E" />
+              <path d="M5 19C9 14 14 10 18 8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            りにゅうしょく ストック
+          </div>
+          <div class="date" id="today"></div>
         </div>
-        <div class="date" id="today"></div>
+        <button class="share-chip" id="shareBtn" hidden>🔗 共有する</button>
       </header>
 
       <div class="tabs" role="tablist">
@@ -140,5 +143,6 @@
 
     <script src="src/logic.js"></script>
     <script src="src/app.js"></script>
+    <script type="module" src="src/sync.js"></script>
   </body>
 </html>
