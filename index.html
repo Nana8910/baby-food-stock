@@ -83,9 +83,11 @@
         </div>
         <label>つくった日</label>
         <input id="makeDate" type="date" />
+        <label>期限（任意・直接入力）</label>
+        <input id="makeExpire" type="date" />
         <button class="save" id="makeSave">ストックに追加</button>
         <p class="note">
-          めやす：冷蔵は2日くらい、冷凍は1週間くらいで使い切りましょう。鮮度は「つくった日」をもとに表示されます。最終的なあげる・あげないの判断はご自身でお願いします。
+          期限を入れると、その日付をもとに鮮度（あと◯日／期限すぎ）を表示します。空欄なら、つくった日と保存方法から自動で判定します（冷蔵は約2日・冷凍は約1週間）。最終的な判断はご自身でお願いします。
         </p>
       </div>
     </div>
@@ -132,10 +134,53 @@
           <button data-v="昼" aria-pressed="false">🌞 昼</button>
           <button data-v="晩" aria-pressed="false">🌙 晩</button>
         </div>
-        <label style="margin-top: 18px">やさい</label>
+        <label style="margin-top: 18px">在庫からあげる</label>
         <div id="serveList"></div>
+        <label style="margin-top: 6px">在庫にないものをあげる（任意）</label>
+        <div class="direct-row">
+          <input id="directName" placeholder="食材名（例：バナナ）" />
+          <div class="stepper">
+            <button data-step="directQty" data-dir="-1" aria-label="へらす">−</button>
+            <input id="directQty" type="number" value="1" min="1" inputmode="numeric" />
+            <button data-step="directQty" data-dir="1" aria-label="ふやす">＋</button>
+          </div>
+          <button class="direct-add" id="directAdd">追加</button>
+        </div>
+        <div id="directChips" class="picks" style="margin-top: 8px"></div>
+        <label style="margin-top: 6px">ごはんのふりかけ（任意）</label>
+        <input id="serveFurikake" placeholder="例：青のり、ごま、ふりかけ" />
         <button class="save" id="serveSave" disabled>きろくする</button>
-        <p class="note">古いストックから自動でへらします（先に作った分から使います）。</p>
+        <p class="note">在庫から選んだ分は、古いストックから自動でへらします。「在庫にないもの」はきろくだけ残ります（在庫と同じ名前なら在庫からも減ります）。</p>
+      </div>
+    </div>
+
+    <!-- edit meal sheet -->
+    <div class="scrim" id="editScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="きろくを編集">
+        <div class="grab"></div>
+        <h2>きろくを編集</h2>
+        <label>時間帯</label>
+        <div class="seg" id="editSlot">
+          <button data-v="朝" aria-pressed="false">🌅 朝</button>
+          <button data-v="昼" aria-pressed="false">🌞 昼</button>
+          <button data-v="晩" aria-pressed="false">🌙 晩</button>
+        </div>
+        <label>あげたもの</label>
+        <div id="editList"></div>
+        <label>追加する（任意）</label>
+        <div class="direct-row">
+          <input id="editAddName" placeholder="食材名" />
+          <div class="stepper">
+            <button data-step="editAddQty" data-dir="-1" aria-label="へらす">−</button>
+            <input id="editAddQty" type="number" value="1" min="1" inputmode="numeric" />
+            <button data-step="editAddQty" data-dir="1" aria-label="ふやす">＋</button>
+          </div>
+          <button class="direct-add" id="editAdd">追加</button>
+        </div>
+        <label>ごはんのふりかけ（任意）</label>
+        <input id="editFurikake" placeholder="例：青のり、ごま、ふりかけ" />
+        <button class="save" id="editSave">保存する</button>
+        <p class="note">数量を変えると、差の分だけ在庫を調整します（増やせば在庫から減り、減らせば在庫に戻ります）。0にすると、その食材はきろくから外れます。</p>
       </div>
     </div>
 

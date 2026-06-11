@@ -172,3 +172,50 @@ test('planMenus: 在庫が無ければ hasStock=false', () => {
   assert.equal(r.hasStock, false);
   assert.equal(r.total, 0);
 });
+
+test('freshness: 期限の直接入力があればそちらを優先する', () => {
+  const withExpire = (expire) => batch({ made: '2026-06-09', store: '冷蔵', expire });
+  assert.deepEqual(BabyFood.freshness(withExpire('2026-06-07'), NOW), { cls: 'b-old', txt: '期限すぎ2日', alert: true });
+  assert.deepEqual(BabyFood.freshness(withExpire('2026-06-09'), NOW), { cls: 'b-soon', txt: '今日まで', alert: true });
+  assert.deepEqual(BabyFood.freshness(withExpire('2026-06-10'), NOW), { cls: 'b-soon', txt: 'あと1日', alert: false });
+  assert.deepEqual(BabyFood.freshness(withExpire('2026-06-14'), NOW), { cls: 'b-fresh', txt: 'あと5日', alert: false });
+  // expire が空文字なら従来どおり（作った日＋保存方法）
+  assert.equal(BabyFood.freshness(batch({ made: '2026-06-09', store: '冷蔵', expire: '' }), NOW).txt, 'つくりたて');
+});
+
+test('isRice: ごはん系の名前を判定する', () => {
+  assert.equal(BabyFood.isRice('5倍がゆ'), true);
+  assert.equal(BabyFood.isRice('軟飯'), true);
+  assert.equal(BabyFood.isRice('ひとくちおにぎりご飯'), true);
+  assert.equal(BabyFood.isRice('雑炊'), true);
+  assert.equal(BabyFood.isRice('にんじん'), false);
+  assert.equal(BabyFood.isRice('鶏ささみ'), false);
+});
+
+test('countCompleteMenus: ごはん1＋タンパク質1＋野菜3 がそろう回数を数える', () => {
+  const batches = [
+    { id: 'r', veg: '5倍がゆ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { id: 'p', veg: '鶏ささみ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+    { id: 'v1', veg: 'にんじん', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { id: 'v2', veg: 'かぼちゃ', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { id: 'v3', veg: 'ほうれん草', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  // 2巡目も r/p/野菜3種がそろうので 2回分
+  assert.equal(BabyFood.countCompleteMenus(batches), 2);
+  // 野菜が2種しか無ければ「そろう」献立は作れない
+  const fewVeg = batches.filter((b) => b.id !== 'v3');
+  assert.equal(BabyFood.countCompleteMenus(fewVeg), 0);
+  // 元の在庫は変更されない
+  assert.equal(batches[0].qty, 2);
+});
+
+test('planMenus: complete（そろう献立数）を含めて返す', () => {
+  const batches = [
+    { id: 'r', veg: '5倍がゆ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { id: 'p', veg: '鶏ささみ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+    { id: 'v1', veg: 'にんじん', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { id: 'v2', veg: 'かぼちゃ', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { id: 'v3', veg: 'ほうれん草', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  assert.equal(BabyFood.planMenus(batches, { perDay: 1 }).complete, 1);
+});

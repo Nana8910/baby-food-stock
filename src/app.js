@@ -3,8 +3,8 @@
  * 状態は localStorage に保存し、計算ロジックは window.BabyFood に任せる。
  *
  * ingredient: { id, name, qty, unit, store, bought, expire, cat }
- * batch     : { id, veg, qty, made, store, cat }
- * meal      : { id, ts, slot, items: [{ veg, qty }] }
+ * batch     : { id, veg, qty, made, store, cat, expire? }
+ * meal      : { id, ts, slot, items: [{ veg, qty }], furikake? }
  */
 (function () {
   'use strict';
@@ -19,6 +19,7 @@
     madeLabel,
     daysUntil,
     slotFromHour,
+    isRice,
     groupBatches,
     deductFIFO,
     restoreToStock,
@@ -217,7 +218,7 @@
   }
   function renderRecommend() {
     const box = $('recommendBox');
-    const { days, ranOut, total, hasStock } = planMenus(state.batches, { perDay: recPerDay });
+    const { days, ranOut, complete, hasStock } = planMenus(state.batches, { perDay: recPerDay });
     let html = `<div class="rec-title">📋 これからのおすすめ献立</div>
       <div class="rec-sub">いまの在庫を組み合わせた、仮のメニュー（ごはん1＋タンパク質1＋野菜3）です。毎食なるべく違う組み合わせにします。</div>
       <div class="rec-controls"><span>1日の回数</span><div class="seg seg-rec" id="recPer">
@@ -234,7 +235,7 @@
         <button class="save" style="margin-top:14px" data-act="rec-make">＋ つくる</button>
       </div>`;
     } else {
-      html += `<div class="rec-count">いまの在庫で <b>あと${total}回分</b> の献立が作れます${ranOut ? '' : '（4日分以上）'}</div>`;
+      html += `<div class="rec-count">いまの在庫で、ごはん1＋タンパク質1＋野菜3 がそろう献立は <b>あと${complete}回分</b> 作れます</div>`;
       const dayName = ['今日', '明日', '明後日', '3日後'];
       days.forEach((meals, di) => {
         html += `<div class="rec-day">${dayName[di] || di + 1 + '日後'}</div>`;
@@ -281,10 +282,18 @@
           const t = new Date(m.ts);
           const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
           html += `<div class="meal"><span class="time">${hm}</span>`;
+          // ふりかけは最初のごはん系の品に付随表示し、無ければ別途表示する。
+          let furiDone = false;
           for (const it of m.items) {
-            html += `<span class="pill" style="background:${colorOf(it.veg)}22"><i style="background:${colorOf(it.veg)}"></i>${esc(it.veg)} ×${it.qty}</span>`;
+            let label = esc(it.veg);
+            if (m.furikake && !furiDone && (isRice(it.veg) || catOfVeg(it.veg) === 'ごはん')) {
+              label += `<span class="furi-sub">（${esc(m.furikake)}）</span>`;
+              furiDone = true;
+            }
+            html += `<span class="pill" style="background:${colorOf(it.veg)}22"><i style="background:${colorOf(it.veg)}"></i>${label} ×${it.qty}</span>`;
           }
-          html += `<button class="undo" data-undo="${m.id}">取り消し</button></div>`;
+          if (m.furikake && !furiDone) html += `<span class="furi-loose">ふりかけ：${esc(m.furikake)}</span>`;
+          html += `<button class="undo" data-edit="${m.id}">編集</button><button class="undo" data-undo="${m.id}">取り消し</button></div>`;
         }
       }
       html += `</div>`;
@@ -297,7 +306,8 @@
     renderStock();
     renderRecommend();
     renderLog();
-    $('serveBtn').disabled = !state.batches.some((b) => b.qty > 0);
+    // 在庫が無くても「在庫にないもの」を記録できるため、常に押せる。
+    $('serveBtn').disabled = false;
   }
 
   /* ---------- タブ ---------- */
@@ -348,6 +358,7 @@
     $('makeCustom').value = '';
     $('makeQty').value = 8;
     $('makeDate').value = todayISO();
+    $('makeExpire').value = '';
     document.querySelectorAll('#makeStore button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === makeStore));
     $('makeUse').hidden = true;
     show('makeScrim');
@@ -391,13 +402,14 @@
     const veg = custom || makeVeg;
     const qty = Math.max(1, parseInt($('makeQty').value, 10) || 0);
     const made = $('makeDate').value || todayISO();
+    const expire = $('makeExpire').value || '';
     if (!veg) {
       toast('食材を選んでね');
       return;
     }
     const ing0 = state.ingredients.find((i) => i.id === makeIngId);
     const cat = ing0 ? ing0.cat || makeCat : CAT_OF_NAME[veg] || makeCat;
-    state.batches.push({ id: uid(), veg, qty, made, store: makeStore, cat });
+    state.batches.push({ id: uid(), veg, qty, made, store: makeStore, cat, expire });
     // 紐づく生食材があれば、使った分だけ減らす。
     let usedMsg = '';
     if (ing0 && !custom) {
@@ -472,12 +484,18 @@
 
   /* ---------- あげるシート ---------- */
   let serveSlot = '朝';
+  let directItems = []; // 在庫にないものの直接記録 [{ veg, qty }]
   function catOfVeg(v) {
     const b = state.batches.find((x) => x.veg === v);
     return b ? b.cat || '野菜' : '野菜';
   }
   function openServe() {
     serveSlot = slotFromHour(new Date().getHours());
+    directItems = [];
+    $('directName').value = '';
+    $('directQty').value = 1;
+    $('serveFurikake').value = '';
+    renderDirectChips();
     document.querySelectorAll('#serveSlot button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === serveSlot));
     const g = groupBatches(state.batches);
     const byCat = {};
@@ -502,9 +520,48 @@
           </div></div></div>`;
       }
     }
-    $('serveList').innerHTML = html;
+    $('serveList').innerHTML = html || `<p class="note" style="margin:4px 2px">在庫はありません。下の「在庫にないもの」から記録できます。</p>`;
     serveTotal();
     show('serveScrim');
+  }
+  function renderDirectChips() {
+    $('directChips').innerHTML = directItems
+      .map(
+        (d, i) =>
+          `<button class="veg-pick" data-direct-del="${i}"><i style="background:${colorOf(d.veg)}"></i>${esc(d.veg)} ×${d.qty} ✕</button>`
+      )
+      .join('');
+  }
+  function addDirect() {
+    const name = $('directName').value.trim();
+    const qty = Math.max(1, parseInt($('directQty').value, 10) || 1);
+    if (!name) {
+      toast('食材名を入れてね');
+      return;
+    }
+    const ex = directItems.find((d) => d.veg === name);
+    if (ex) ex.qty += qty;
+    else directItems.push({ veg: name, qty });
+    $('directName').value = '';
+    $('directQty').value = 1;
+    renderDirectChips();
+    serveTotal();
+  }
+  function removeDirect(i) {
+    directItems.splice(i, 1);
+    renderDirectChips();
+    serveTotal();
+  }
+  // 「追加」を押し忘れても、入力欄に残っている食材を取り込む。
+  function flushDirect() {
+    const name = $('directName').value.trim();
+    if (!name) return;
+    const qty = Math.max(1, parseInt($('directQty').value, 10) || 1);
+    const ex = directItems.find((d) => d.veg === name);
+    if (ex) ex.qty += qty;
+    else directItems.push({ veg: name, qty });
+    $('directName').value = '';
+    $('directQty').value = 1;
   }
   function serveStep(btn, d) {
     const inp = btn.parentElement.querySelector('input');
@@ -530,22 +587,120 @@
       }
       tot += v;
     });
+    tot += directItems.reduce((s, d) => s + d.qty, 0);
+    if ($('directName').value.trim()) tot++; // 入力中（未追加）も有効に
     $('serveSave').disabled = tot === 0;
   }
   function saveServe() {
-    const items = [];
+    flushDirect();
+    // 在庫から選んだ分と直接記録を、同名はまとめて1リストにする。
+    const map = {};
     document.querySelectorAll('#serveList .serve-row').forEach((r) => {
       const v = parseInt(r.querySelector('input').value, 10) || 0;
-      if (v > 0) items.push({ veg: r.dataset.veg, qty: v });
+      if (v > 0) map[r.dataset.veg] = (map[r.dataset.veg] || 0) + v;
     });
+    directItems.forEach((d) => {
+      map[d.veg] = (map[d.veg] || 0) + d.qty;
+    });
+    const items = Object.keys(map).map((veg) => ({ veg, qty: map[veg] }));
     if (!items.length) return;
+    // 在庫がある分はFIFOで減らす（在庫に無い名前はそのままスキップされる）。
     state.batches = deductFIFO(state.batches, items);
-    state.meals.push({ id: uid(), ts: Date.now(), slot: serveSlot, items });
+    const furikake = $('serveFurikake').value.trim();
+    state.meals.push({ id: uid(), ts: Date.now(), slot: serveSlot, items, furikake });
     save();
     renderAll();
     hide('serveScrim');
     switchTab('log');
     toast(`${serveSlot}：` + items.map((i) => `${i.veg}×${i.qty}`).join('・'));
+  }
+
+  /* ---------- きろく編集シート ---------- */
+  let editMealId = null;
+  let editSlot = '朝';
+  let editItems = []; // 編集中の品目 [{ veg, qty }]
+
+  function openEditMeal(id) {
+    const m = state.meals.find((x) => x.id === id);
+    if (!m) return;
+    editMealId = id;
+    editSlot = slotOf(m);
+    editItems = m.items.map((it) => ({ veg: it.veg, qty: it.qty }));
+    document.querySelectorAll('#editSlot button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === editSlot));
+    $('editAddName').value = '';
+    $('editAddQty').value = 1;
+    $('editFurikake').value = m.furikake || '';
+    renderEditList();
+    show('editScrim');
+  }
+  function renderEditList() {
+    const el = $('editList');
+    if (!editItems.length) {
+      el.innerHTML = `<p class="note" style="margin:4px 2px">食材がありません。下から追加できます。</p>`;
+      return;
+    }
+    el.innerHTML = editItems
+      .map(
+        (it, i) => `<div class="serve-row" data-edit-idx="${i}">
+      <div class="chip" style="background:${colorOf(it.veg)};width:34px;height:34px;border-radius:11px;font-size:15px">${[...it.veg][0]}</div>
+      <div><div class="nm">${esc(it.veg)}</div></div>
+      <div class="right"><div class="stepper">
+        <button data-edit-step="-1" aria-label="へらす">−</button>
+        <input type="number" value="${it.qty}" min="0" inputmode="numeric" />
+        <button data-edit-step="1" aria-label="ふやす">＋</button>
+      </div></div></div>`
+      )
+      .join('');
+  }
+  function editAddItem() {
+    const name = $('editAddName').value.trim();
+    const qty = Math.max(1, parseInt($('editAddQty').value, 10) || 1);
+    if (!name) {
+      toast('食材名を入れてね');
+      return;
+    }
+    const ex = editItems.find((d) => d.veg === name);
+    if (ex) ex.qty += qty;
+    else editItems.push({ veg: name, qty });
+    $('editAddName').value = '';
+    $('editAddQty').value = 1;
+    renderEditList();
+  }
+  function saveEditMeal() {
+    const m = state.meals.find((x) => x.id === editMealId);
+    if (!m) return;
+    // 「追加」を押し忘れても、入力欄に残っている食材を取り込む。
+    const pName = $('editAddName').value.trim();
+    if (pName) {
+      const pQty = Math.max(1, parseInt($('editAddQty').value, 10) || 1);
+      const ex = editItems.find((d) => d.veg === pName);
+      if (ex) ex.qty += pQty;
+      else editItems.push({ veg: pName, qty: pQty });
+    }
+    // 元の記録との差分だけ在庫を調整する（増→在庫から引く／減→在庫に戻す）。
+    const orig = {};
+    m.items.forEach((it) => (orig[it.veg] = (orig[it.veg] || 0) + it.qty));
+    const neu = {};
+    editItems.forEach((it) => {
+      if (it.qty > 0) neu[it.veg] = (neu[it.veg] || 0) + it.qty;
+    });
+    const increases = [];
+    const decreases = [];
+    new Set([...Object.keys(orig), ...Object.keys(neu)]).forEach((veg) => {
+      const delta = (neu[veg] || 0) - (orig[veg] || 0);
+      if (delta > 0) increases.push({ veg, qty: delta });
+      else if (delta < 0) decreases.push({ veg, qty: -delta });
+    });
+    if (increases.length) state.batches = deductFIFO(state.batches, increases);
+    if (decreases.length) state.batches = restoreToStock(state.batches, decreases, { uid, today: todayISO() });
+    m.items = Object.keys(neu).map((veg) => ({ veg, qty: neu[veg] }));
+    m.slot = editSlot;
+    m.furikake = $('editFurikake').value.trim();
+    if (!m.items.length) state.meals = state.meals.filter((x) => x.id !== m.id); // 全部0なら記録ごと削除
+    save();
+    renderAll();
+    hide('editScrim');
+    toast('きろくを更新しました');
   }
 
   /* ---------- 削除 / 取り消し ---------- */
@@ -630,6 +785,7 @@
     $('makeSave').addEventListener('click', saveMake);
     $('ingSave').addEventListener('click', saveIng);
     $('serveSave').addEventListener('click', saveServe);
+    $('editSave').addEventListener('click', saveEditMeal);
 
     // 各シートのステッパー（数の増減）
     document.querySelectorAll('[data-step]').forEach((b) =>
@@ -640,6 +796,7 @@
     wireSeg('makeStore', (v) => (makeStore = v));
     wireSeg('ingStore', (v) => (ingStore = v));
     wireSeg('serveSlot', (v) => (serveSlot = v));
+    wireSeg('editSlot', (v) => (editSlot = v));
 
     // つくるシート：カテゴリ・候補
     $('makeCat').addEventListener('click', (e) => {
@@ -667,7 +824,7 @@
       document.querySelectorAll('#ingPicks .veg-pick').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === val));
     });
 
-    // あげるシート：数の増減
+    // あげるシート：数の増減・直接記録
     $('serveList').addEventListener('click', (e) => {
       const b = e.target.closest('[data-serve-step]');
       if (b) serveStep(b, parseInt(b.dataset.serveStep, 10));
@@ -675,6 +832,29 @@
     $('serveList').addEventListener('input', (e) => {
       if (e.target.matches('input')) serveTotal();
     });
+    $('directAdd').addEventListener('click', addDirect);
+    $('directName').addEventListener('input', serveTotal);
+    $('directChips').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-direct-del]');
+      if (b) removeDirect(parseInt(b.dataset.directDel, 10));
+    });
+
+    // きろく編集シート：品目の増減・追加
+    $('editList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-edit-step]');
+      if (!b) return;
+      const row = b.closest('[data-edit-idx]');
+      const i = parseInt(row.dataset.editIdx, 10);
+      editItems[i].qty = Math.max(0, (editItems[i].qty || 0) + parseInt(b.dataset.editStep, 10));
+      renderEditList();
+    });
+    $('editList').addEventListener('input', (e) => {
+      if (!e.target.matches('input')) return;
+      const row = e.target.closest('[data-edit-idx]');
+      if (!row) return;
+      editItems[parseInt(row.dataset.editIdx, 10)].qty = Math.max(0, parseInt(e.target.value, 10) || 0);
+    });
+    $('editAdd').addEventListener('click', editAddItem);
 
     // 食材タブ：追加・編集・削除・ストック化
     $('view-ingredients').addEventListener('click', (e) => {
@@ -705,8 +885,13 @@
       if (e.target.closest('[data-act="rec-make"]')) openMake();
     });
 
-    // きろく：取り消し
+    // きろく：編集・取り消し
     $('historyBox').addEventListener('click', (e) => {
+      const ed = e.target.closest('[data-edit]');
+      if (ed) {
+        openEditMeal(ed.dataset.edit);
+        return;
+      }
       const b = e.target.closest('[data-undo]');
       if (b) undoMeal(b.dataset.undo);
     });

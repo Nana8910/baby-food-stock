@@ -7,8 +7,8 @@
  * ブラウザでは window.BabyFood として、Node では require() で読み込める。
  *
  * ingredient（冷蔵庫の生食材）: { id, name, qty, unit, store, bought, expire, cat }
- * batch（ストック1回分）      : { id, veg, qty, made, store, cat }   made は "YYYY-MM-DD"
- * meal （あげた記録）         : { id, ts, slot, items: [{ veg, qty }] }
+ * batch（ストック1回分）      : { id, veg, qty, made, store, cat, expire? }   made/expire は "YYYY-MM-DD"
+ * meal （あげた記録）         : { id, ts, slot, items: [{ veg, qty }], furikake? }
  */
 (function (root, factory) {
   const api = factory();
@@ -73,8 +73,19 @@
     return Math.round((atMidnight(targetISO) - baseDay(now)) / 86400000);
   }
 
-  /** ストックの鮮度を判定する。{ cls, txt, alert } を返す。 */
+  /**
+   * ストックの鮮度を判定する。{ cls, txt, alert } を返す。
+   * expire（期限の直接入力）があればその日付を優先し、
+   * 無ければ作った日と保存方法（冷蔵2日/冷凍7日）から判定する。
+   */
   function freshness(batch, now) {
+    if (batch.expire) {
+      const d = daysUntil(batch.expire, now);
+      if (d < 0) return { cls: 'b-old', txt: `期限すぎ${-d}日`, alert: true };
+      if (d === 0) return { cls: 'b-soon', txt: '今日まで', alert: true };
+      if (d <= 1) return { cls: 'b-soon', txt: `あと${d}日`, alert: false };
+      return { cls: 'b-fresh', txt: `あと${d}日`, alert: false };
+    }
     const d = daysSince(batch.made, now);
     const { soon, limit } = STORE_LIMITS[batch.store] || STORE_LIMITS['冷蔵'];
     if (d > limit) return { cls: 'b-old', txt: '期限すぎ', alert: true };
@@ -195,6 +206,11 @@
     return '晩';
   }
 
+  /** ごはん系の名前か（ふりかけの付随表示などに使う）。 */
+  function isRice(name) {
+    return catOfName(name) === 'ごはん' || /ごはん|ご飯|がゆ|軟飯|おじや|雑炊/.test(name);
+  }
+
   /**
    * 同じ野菜の数量を合算してまとめる（初めて出てきた順を保つ）。
    * 例: [人参2, おかゆ1, 人参1] → [人参3, おかゆ1]
@@ -248,10 +264,36 @@
   }
 
   /**
+   * ごはん1＋タンパク質1＋野菜3（別々の3種）が「そろう」献立を、
+   * いまの在庫からいくつ作れるか数える。元の batches は変更しない。
+   */
+  function countCompleteMenus(batches, options) {
+    const vegPerMeal = (options || {}).vegPerMeal || 3;
+    const pools = buildPools(batches);
+    let count = 0;
+    for (;;) {
+      const rice = takeOne(pools['ごはん'], [], []);
+      const protein = takeOne(pools['タンパク質'], [], []);
+      const used = [];
+      let veg = 0;
+      for (let k = 0; k < vegPerMeal; k++) {
+        const p = takeOne(pools['野菜'], used, []);
+        if (p) {
+          veg++;
+          used.push(p.veg);
+        }
+      }
+      if (rice && protein && veg === vegPerMeal) count++;
+      else break;
+    }
+    return count;
+  }
+
+  /**
    * いまの在庫から、これからのおすすめ献立（ごはん1＋タンパク質1＋野菜数品）を組む。
    * 毎食なるべく違う組み合わせにする。元の batches は変更しない。
    * options: { perDay=2, maxDays=4, vegPerMeal=3 }
-   * 返り値: { days: [[{rice,protein,veg:[]}]], ranOut, total, hasStock }
+   * 返り値: { days: [[{rice,protein,veg:[]}]], ranOut, total, complete, hasStock }
    */
   function planMenus(batches, options) {
     const opts = options || {};
@@ -285,7 +327,13 @@
       if (meals.length) days.push(meals);
     }
     const total = days.reduce((s, m) => s + m.length, 0);
-    return { days, ranOut, total, hasStock: batches.some((b) => b.qty > 0) };
+    return {
+      days,
+      ranOut,
+      total,
+      complete: countCompleteMenus(batches, { vegPerMeal }),
+      hasStock: batches.some((b) => b.qty > 0),
+    };
   }
 
   return {
@@ -305,8 +353,10 @@
     deductFIFO,
     restoreToStock,
     slotFromHour,
+    isRice,
     mergeItems,
     buildPools,
+    countCompleteMenus,
     planMenus,
   };
 });
