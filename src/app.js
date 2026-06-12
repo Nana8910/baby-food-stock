@@ -23,6 +23,7 @@
     groupBatches,
     deductFIFO,
     restoreToStock,
+    totalOf,
     planMenus,
   } = window.BabyFood;
 
@@ -263,7 +264,7 @@
     }
     const byDay = {};
     state.meals.forEach((m) => {
-      const k = new Date(m.ts).toISOString().slice(0, 10);
+      const k = localDayISO(m.ts);
       (byDay[k] = byDay[k] || []).push(m);
     });
     for (const k of Object.keys(byDay).sort().reverse()) {
@@ -602,7 +603,13 @@
     directItems.forEach((d) => {
       map[d.veg] = (map[d.veg] || 0) + d.qty;
     });
-    const items = Object.keys(map).map((veg) => ({ veg, qty: map[veg] }));
+    // taken = 実際に在庫から引ける数。取り消し・編集で在庫に戻すのはこの分だけ
+    // （在庫に無い「直接記録」を戻すと、存在しないストックが生まれてしまうため）。
+    const items = Object.keys(map).map((veg) => ({
+      veg,
+      qty: map[veg],
+      taken: Math.min(map[veg], totalOf(state.batches, veg)),
+    }));
     if (!items.length) return;
     // 在庫がある分はFIFOで減らす（在庫に無い名前はそのままスキップされる）。
     state.batches = deductFIFO(state.batches, items);
@@ -678,22 +685,40 @@
       else editItems.push({ veg: pName, qty: pQty });
     }
     // 元の記録との差分だけ在庫を調整する（増→在庫から引く／減→在庫に戻す）。
+    // 在庫に戻すのは「実際に在庫から引いた数（taken）」が上限。
     const orig = {};
-    m.items.forEach((it) => (orig[it.veg] = (orig[it.veg] || 0) + it.qty));
+    m.items.forEach((it) => {
+      const o = (orig[it.veg] = orig[it.veg] || { qty: 0, taken: 0 });
+      o.qty += it.qty;
+      o.taken += takenOf(it);
+    });
     const neu = {};
     editItems.forEach((it) => {
       if (it.qty > 0) neu[it.veg] = (neu[it.veg] || 0) + it.qty;
     });
     const increases = [];
     const decreases = [];
+    const newTaken = {};
     new Set([...Object.keys(orig), ...Object.keys(neu)]).forEach((veg) => {
-      const delta = (neu[veg] || 0) - (orig[veg] || 0);
-      if (delta > 0) increases.push({ veg, qty: delta });
-      else if (delta < 0) decreases.push({ veg, qty: -delta });
+      const o = orig[veg] || { qty: 0, taken: 0 };
+      const q = neu[veg] || 0;
+      const delta = q - o.qty;
+      if (delta > 0) {
+        // 増えた分は在庫から引く（在庫が足りない分は直接記録扱い）。
+        increases.push({ veg, qty: delta });
+        newTaken[veg] = o.taken + Math.min(delta, totalOf(state.batches, veg));
+      } else if (delta < 0) {
+        // 減った分は、在庫から引いた範囲だけ在庫に戻す。
+        const back = Math.min(-delta, o.taken);
+        if (back > 0) decreases.push({ veg, qty: back });
+        newTaken[veg] = o.taken - back;
+      } else {
+        newTaken[veg] = Math.min(q, o.taken);
+      }
     });
     if (increases.length) state.batches = deductFIFO(state.batches, increases);
     if (decreases.length) state.batches = restoreToStock(state.batches, decreases, { uid, today: todayISO() });
-    m.items = Object.keys(neu).map((veg) => ({ veg, qty: neu[veg] }));
+    m.items = Object.keys(neu).map((veg) => ({ veg, qty: neu[veg], taken: Math.min(neu[veg], newTaken[veg]) }));
     m.slot = editSlot;
     m.furikake = $('editFurikake').value.trim();
     if (!m.items.length) state.meals = state.meals.filter((x) => x.id !== m.id); // 全部0なら記録ごと削除
@@ -709,10 +734,17 @@
     save();
     renderAll();
   }
+  // 記録した品目のうち、在庫から実際に引いた数（taken が無い古い記録は全量）。
+  function takenOf(it) {
+    return it.taken != null ? it.taken : it.qty;
+  }
   function undoMeal(id) {
     const m = state.meals.find((x) => x.id === id);
     if (!m) return;
-    state.batches = restoreToStock(state.batches, m.items, { uid, today: todayISO() });
+    const restore = m.items
+      .map((it) => ({ veg: it.veg, qty: takenOf(it) }))
+      .filter((it) => it.qty > 0);
+    if (restore.length) state.batches = restoreToStock(state.batches, restore, { uid, today: todayISO() });
     state.meals = state.meals.filter((x) => x.id !== id);
     save();
     renderAll();
@@ -731,16 +763,19 @@
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
-  function todayISO() {
-    const d = new Date();
+  // タイムスタンプをローカル時刻の "YYYY-MM-DD" にする（toISOString は UTC のため直接は使わない）。
+  function localDayISO(ts) {
+    const d = new Date(ts);
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+  function todayISO() {
+    return localDayISO(Date.now());
   }
   function fmtDay(iso) {
     const d = new Date(iso + 'T00:00:00');
     const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
     const today = todayISO();
-    const y = new Date(Date.now() - 86400000);
-    const yi = new Date(y.getTime() - y.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const yi = localDayISO(Date.now() - 86400000);
     let pre = '';
     if (iso === today) pre = '今日 ・ ';
     else if (iso === yi) pre = '昨日 ・ ';
