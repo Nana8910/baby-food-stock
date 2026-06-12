@@ -92,7 +92,7 @@ test('restoreToStock: 戻し先が無ければ新規ストックを作る', () =
     { uid: () => 'gen', today: '2026-06-09' }
   );
   assert.equal(next.length, 1);
-  assert.deepEqual(next[0], { id: 'gen', veg: 'ほうれん草', qty: 2, made: '2026-06-09', store: '冷蔵' });
+  assert.deepEqual(next[0], { id: 'gen', veg: 'ほうれん草', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' });
 });
 
 test('slotFromHour: 時刻から朝昼晩を決める', () => {
