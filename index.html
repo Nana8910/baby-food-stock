@@ -195,6 +195,34 @@
       </div>
     </div>
 
+    <!-- edit stock (batch) sheet -->
+    <div class="scrim" id="batchScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="ストックを編集">
+        <div class="grab"></div>
+        <h2>ストックを編集</h2>
+        <div class="batch-veg" id="batchVeg"></div>
+        <label>個数</label>
+        <div class="stepper">
+          <button data-step="batchQty" data-dir="-1" aria-label="へらす">−</button>
+          <input id="batchQty" type="number" value="1" min="1" inputmode="numeric" />
+          <button data-step="batchQty" data-dir="1" aria-label="ふやす">＋</button>
+          <span class="step-unit">個</span>
+        </div>
+        <label>ほぞん方法</label>
+        <div class="seg" id="batchStore">
+          <button data-v="冷蔵">冷蔵（れいぞう）</button>
+          <button data-v="冷凍">冷凍（れいとう）</button>
+        </div>
+        <label>つくった日</label>
+        <input id="batchMade" type="date" />
+        <label>期限（任意・直接入力）</label>
+        <input id="batchExpire" type="date" />
+        <button class="save" id="batchSave">保存する</button>
+        <button class="save del-btn" id="batchDelete">このストックを削除</button>
+        <p class="note">期限を入れると、その日付をもとに鮮度を表示します。空欄なら、つくった日と保存方法から自動で判定します。</p>
+      </div>
+    </div>
+
     <div class="toast" id="toast"></div>
 
     <script src="src/logic.js"></script>

@@ -176,6 +176,7 @@
         <span class="store">${b.store}</span>
         <span class="made">${madeLabel(b.made)}につくった</span>
         <span class="qty">×${b.qty}</span>
+        <button class="trash edit" title="このストックを編集" data-edit-batch="${b.id}">✏️</button>
         <button class="trash" title="このストックを削除" data-del="${b.id}">🗑</button>
       </div>`;
     }
@@ -728,6 +729,40 @@
     toast('きろくを更新しました');
   }
 
+  /* ---------- ストック編集シート ---------- */
+  let editBatchId = null;
+  let batchStore = '冷蔵';
+  function openEditBatch(id) {
+    const b = state.batches.find((x) => x.id === id);
+    if (!b) return;
+    editBatchId = id;
+    batchStore = b.store || '冷蔵';
+    $('batchVeg').textContent = b.veg;
+    $('batchQty').value = Math.max(1, b.qty);
+    $('batchMade').value = b.made || todayISO();
+    $('batchExpire').value = b.expire || '';
+    document.querySelectorAll('#batchStore button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.v === batchStore));
+    show('batchScrim');
+  }
+  function saveEditBatch() {
+    const b = state.batches.find((x) => x.id === editBatchId);
+    if (!b) return;
+    b.qty = Math.max(1, parseInt($('batchQty').value, 10) || 1);
+    b.store = batchStore;
+    b.made = $('batchMade').value || b.made || todayISO();
+    b.expire = $('batchExpire').value || '';
+    save();
+    renderAll();
+    hide('batchScrim');
+    toast(`${b.veg} を更新しました`);
+  }
+  function deleteEditBatch() {
+    if (!editBatchId) return;
+    delBatch(editBatchId);
+    hide('batchScrim');
+    toast('ストックを削除しました');
+  }
+
   /* ---------- 削除 / 取り消し ---------- */
   function delBatch(id) {
     state.batches = state.batches.filter((b) => b.id !== id);
@@ -821,6 +856,8 @@
     $('ingSave').addEventListener('click', saveIng);
     $('serveSave').addEventListener('click', saveServe);
     $('editSave').addEventListener('click', saveEditMeal);
+    $('batchSave').addEventListener('click', saveEditBatch);
+    $('batchDelete').addEventListener('click', deleteEditBatch);
 
     // 各シートのステッパー（数の増減）
     document.querySelectorAll('[data-step]').forEach((b) =>
@@ -832,6 +869,7 @@
     wireSeg('ingStore', (v) => (ingStore = v));
     wireSeg('serveSlot', (v) => (serveSlot = v));
     wireSeg('editSlot', (v) => (editSlot = v));
+    wireSeg('batchStore', (v) => (batchStore = v));
 
     // つくるシート：カテゴリ・候補
     $('makeCat').addEventListener('click', (e) => {
@@ -901,8 +939,13 @@
       else if (b.dataset.act === 'ing-del') delIng(b.dataset.id);
     });
 
-    // 在庫タブ：ストック削除
+    // 在庫タブ：ストック編集・削除
     $('view-stock').addEventListener('click', (e) => {
+      const ed = e.target.closest('[data-edit-batch]');
+      if (ed) {
+        openEditBatch(ed.dataset.editBatch);
+        return;
+      }
       const b = e.target.closest('[data-del]');
       if (b) delBatch(b.dataset.del);
     });

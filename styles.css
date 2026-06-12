@@ -267,6 +267,24 @@ header {
   background: var(--danger-soft);
   color: var(--danger);
 }
+.trash.edit:hover {
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+}
+.batch-veg {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--ink);
+  margin: -4px 2px 4px;
+}
+.save.del-btn {
+  background: var(--surface);
+  color: var(--danger);
+  border: 1.5px solid var(--danger-soft);
+  box-shadow: none;
+  margin-top: 10px;
+}
 
 /* ingredient card actions */
 .add-ing {
