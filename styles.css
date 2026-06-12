@@ -63,19 +63,31 @@ header {
 .share-chip:active {
   transform: translateY(1px);
 }
-.title {
-  font-family: "M PLUS Rounded 1c";
-  font-weight: 800;
-  font-size: 24px;
-  letter-spacing: 0.01em;
+.brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
 }
-.title .leaf {
-  width: 30px;
-  height: 30px;
-  flex: none;
+.brand-mark {
+  height: 50px;
+  width: auto;
+  display: block;
+}
+.brand-name {
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 600;
+  font-size: 32px;
+  line-height: 0.9;
+  color: #9a7b66;
+  letter-spacing: 0.6px;
+}
+.brand-sub2 {
+  font-family: "Noto Sans JP", sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0.12em;
+  margin-top: 3px;
 }
 .date {
   color: var(--ink-soft);
