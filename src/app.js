@@ -732,12 +732,17 @@
   /* ---------- ストック編集シート ---------- */
   let editBatchId = null;
   let batchStore = '冷蔵';
+  let batchCat = '野菜';
   function openEditBatch(id) {
     const b = state.batches.find((x) => x.id === id);
     if (!b) return;
     editBatchId = id;
     batchStore = b.store || '冷蔵';
+    batchCat = b.cat || catOfName(b.veg);
     $('batchVeg').textContent = b.veg;
+    $('batchCat').innerHTML = CATS.map(
+      (c) => `<button data-v="${c.key}" aria-pressed="${c.key === batchCat}">${c.icon} ${c.key}</button>`
+    ).join('');
     $('batchQty').value = Math.max(1, b.qty);
     $('batchMade').value = b.made || todayISO();
     $('batchExpire').value = b.expire || '';
@@ -749,6 +754,7 @@
     if (!b) return;
     b.qty = Math.max(1, parseInt($('batchQty').value, 10) || 1);
     b.store = batchStore;
+    b.cat = batchCat;
     b.made = $('batchMade').value || b.made || todayISO();
     b.expire = $('batchExpire').value || '';
     save();
@@ -870,6 +876,7 @@
     wireSeg('serveSlot', (v) => (serveSlot = v));
     wireSeg('editSlot', (v) => (editSlot = v));
     wireSeg('batchStore', (v) => (batchStore = v));
+    wireSeg('batchCat', (v) => (batchCat = v));
 
     // つくるシート：カテゴリ・候補
     $('makeCat').addEventListener('click', (e) => {
@@ -1012,6 +1019,7 @@
     load();
     wire();
     renderAll();
+    switchTab('stock'); // 起動時は在庫タブを表示
   }
 
   boot();

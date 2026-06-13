@@ -40,13 +40,13 @@
       </header>
 
       <div class="tabs" role="tablist">
-        <button class="tab" role="tab" id="tab-ingredients" aria-selected="true" data-tab="ingredients">食材</button>
-        <button class="tab" role="tab" id="tab-stock" aria-selected="false" data-tab="stock">在庫</button>
+        <button class="tab" role="tab" id="tab-ingredients" aria-selected="false" data-tab="ingredients">食材</button>
+        <button class="tab" role="tab" id="tab-stock" aria-selected="true" data-tab="stock">在庫</button>
         <button class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">あげたきろく</button>
       </div>
 
-      <div id="view-ingredients"></div>
-      <div id="view-stock" hidden></div>
+      <div id="view-ingredients" hidden></div>
+      <div id="view-stock"></div>
       <div id="view-log" hidden>
         <div id="recommendBox"></div>
         <div id="historyBox"></div>
@@ -201,6 +201,8 @@
         <div class="grab"></div>
         <h2>ストックを編集</h2>
         <div class="batch-veg" id="batchVeg"></div>
+        <label>カテゴリ</label>
+        <div class="seg seg-cat" id="batchCat"></div>
         <label>個数</label>
         <div class="stepper">
           <button data-step="batchQty" data-dir="-1" aria-label="へらす">−</button>
