@@ -183,6 +183,14 @@ test('freshness: 期限の直接入力があればそちらを優先する', () 
   assert.equal(BabyFood.freshness(batch({ made: '2026-06-09', store: '冷蔵', expire: '' }), NOW).txt, 'つくりたて');
 });
 
+test('effectiveExpiry: expire優先、無ければ made+保存方法の限度日数', () => {
+  assert.equal(BabyFood.effectiveExpiry(batch({ expire: '2026-06-13' })), '2026-06-13');
+  assert.equal(BabyFood.effectiveExpiry(batch({ made: '2026-06-09', store: '冷蔵', expire: '' })), '2026-06-11'); // +2
+  assert.equal(BabyFood.effectiveExpiry(batch({ made: '2026-06-09', store: '冷凍', expire: '' })), '2026-06-16'); // +7
+  // 月またぎも正しく計算
+  assert.equal(BabyFood.effectiveExpiry(batch({ made: '2026-06-30', store: '冷蔵', expire: '' })), '2026-07-02');
+});
+
 test('isRice: ごはん系の名前を判定する', () => {
   assert.equal(BabyFood.isRice('5倍がゆ'), true);
   assert.equal(BabyFood.isRice('軟飯'), true);

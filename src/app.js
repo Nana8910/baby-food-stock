@@ -18,6 +18,7 @@
     ingFreshness,
     madeLabel,
     daysUntil,
+    effectiveExpiry,
     slotFromHour,
     isRice,
     groupBatches,
@@ -199,7 +200,10 @@
         const g = groupBy((b) => (b.cat || '野菜') === sec.cat && (sec.store ? b.store === sec.store : true));
         const vs = Object.keys(g);
         if (!vs.length) continue;
-        vs.sort((a, b) => g[b].reduce((s, x) => s + x.qty, 0) - g[a].reduce((s, x) => s + x.qty, 0));
+        // 各ストックを期限が近い（古い）順に並べ、カードもそのカテゴリ内で期限が近い順にする。
+        const minExpiry = (arr) => arr.reduce((m, b) => (effectiveExpiry(b) < m ? effectiveExpiry(b) : m), '9999-99-99');
+        for (const v of vs) g[v].sort((a, b) => effectiveExpiry(a).localeCompare(effectiveExpiry(b)));
+        vs.sort((a, b) => minExpiry(g[a]).localeCompare(minExpiry(g[b])));
         const total = vs.reduce((s, v) => s + g[v].reduce((n, x) => n + x.qty, 0), 0);
         html += `<div class="cat-h"><span class="ic">${sec.icon}</span>${sec.label}<span class="cnt">${total}個</span></div>`;
         for (const v of vs) html += vegCardHTML(v, g[v]);

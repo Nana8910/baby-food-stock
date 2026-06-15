@@ -56,6 +56,26 @@
     return new Date(iso + 'T00:00:00');
   }
 
+  /** ローカル Date を "YYYY-MM-DD" にする。 */
+  function fmtISO(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  /**
+   * ストックの実効期限を "YYYY-MM-DD" で返す（並べ替えの基準）。
+   * expire があればそれ、無ければ made + 保存方法の限度日数（冷蔵2日/冷凍7日）。
+   */
+  function effectiveExpiry(batch) {
+    if (batch.expire) return batch.expire;
+    const limit = (STORE_LIMITS[batch.store] || STORE_LIMITS['冷蔵']).limit;
+    const d = atMidnight(batch.made);
+    d.setDate(d.getDate() + limit);
+    return fmtISO(d);
+  }
+
   /** now（省略時は現在時刻）を 0 時に丸めた Date。 */
   function baseDay(now) {
     const base = now ? new Date(now) : new Date();
@@ -344,6 +364,7 @@
     STORE_LIMITS,
     daysSince,
     daysUntil,
+    effectiveExpiry,
     freshness,
     ingFreshness,
     madeLabel,
