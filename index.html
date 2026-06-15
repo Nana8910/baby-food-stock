@@ -230,5 +230,14 @@
     <script src="src/logic.js"></script>
     <script src="src/app.js"></script>
     <script type="module" src="src/sync.js"></script>
+    <script>
+      // Service Worker（キャッシュ対策＋オフライン対応）。
+      // updateViaCache:'none' で SW 本体を常に最新取得し、更新を確実に検知する。
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>
