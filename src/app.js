@@ -222,48 +222,6 @@
     $('view-stock').innerHTML = html;
   }
 
-  /* ---------- おすすめ献立の描画 ---------- */
-  function menuPills(m) {
-    const chip = (n) => `<span class="pill" style="background:${colorOf(n)}22"><i style="background:${colorOf(n)}"></i>${esc(n)}</span>`;
-    const miss = (t) => `<span class="pill miss">＋${t}</span>`;
-    let s = '';
-    s += m.rice ? chip(m.rice.veg) : miss('ごはん');
-    s += m.protein ? chip(m.protein.veg) : miss('タンパク質');
-    s += m.veg.length ? m.veg.map((v) => chip(v.veg)).join('') : miss('野菜');
-    return s;
-  }
-  function renderRecommend() {
-    const box = $('recommendBox');
-    const { days, ranOut, complete, hasStock } = planMenus(state.batches, { perDay: recPerDay });
-    let html = `<div class="rec-title">📋 これからのおすすめ献立</div>
-      <div class="rec-sub">いまの在庫を組み合わせた、仮のメニュー（ごはん1＋タンパク質1＋野菜3）です。毎食なるべく違う組み合わせにします。</div>
-      <div class="rec-controls"><span>1日の回数</span><div class="seg seg-rec" id="recPer">
-        ${[1, 2, 3].map((n) => `<button data-v="${n}" aria-pressed="${n === recPerDay}">${n}回</button>`).join('')}
-      </div></div>`;
-
-    if (!hasStock) {
-      html += `<div class="rec-blank">
-        <div class="rec-blank-h">まずは3種類そろえると安心です</div>
-        <div class="rec-template">
-          <span class="pill miss">🍚 ごはん</span><span class="pill miss">🍗 タンパク質</span><span class="pill miss">🥕 野菜</span>
-        </div>
-        <p class="note" style="margin-top:10px">例：ごはん＋鶏ささみ＋にんじん。この3つを「＋ つくる」でストックすると、ここに数日分の献立が自動で並びます。</p>
-        <button class="save" style="margin-top:14px" data-act="rec-make">＋ つくる</button>
-      </div>`;
-    } else {
-      html += `<div class="rec-count">いまの在庫で、ごはん1＋タンパク質1＋野菜3 がそろう献立は <b>あと${complete}回分</b> 作れます</div>`;
-      const dayName = ['今日', '明日', '明後日', '3日後'];
-      days.forEach((meals, di) => {
-        html += `<div class="rec-day">${dayName[di] || di + 1 + '日後'}</div>`;
-        meals.forEach((m, mi) => {
-          html += `<div class="rec-meal"><span class="rec-no">${mi + 1}回目</span><div class="rec-pills">${menuPills(m)}</div></div>`;
-        });
-      });
-      if (ranOut) html += `<div class="rec-note">この先は在庫が足りません。「＋ つくる」で補充すると、おすすめが先まで伸びます。</div>`;
-    }
-    box.innerHTML = html;
-  }
-
   /* ---------- あげたきろくの描画 ---------- */
   const SLOTS = ['朝', '昼', '晩'];
   const SLOT_ICON = { 朝: '🌅', 昼: '🌞', 晩: '🌙' };
@@ -321,7 +279,6 @@
     renderIngredients();
     renderStock();
     renderPlan();
-    renderRecommend();
     renderLog();
     // 在庫が無くても「在庫にないもの」を記録できるため、常に押せる。
     $('serveBtn').disabled = false;
@@ -1275,19 +1232,6 @@
       }
       const b = e.target.closest('[data-del]');
       if (b) delBatch(b.dataset.del);
-    });
-
-    // おすすめ：回数切替・空状態のつくる
-    $('recommendBox').addEventListener('click', (e) => {
-      const per = e.target.closest('#recPer button');
-      if (per) {
-        recPerDay = parseInt(per.dataset.v, 10);
-        state.settings.recPerDay = recPerDay;
-        save();
-        renderRecommend();
-        return;
-      }
-      if (e.target.closest('[data-act="rec-make"]')) openMake();
     });
 
     // きろく：編集・取り消し
