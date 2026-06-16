@@ -26,6 +26,12 @@
     restoreToStock,
     totalOf,
     planMenus,
+    stockOutlook,
+    buildPlan,
+    planShortfall,
+    classifyShortfall,
+    reserveConfirmed,
+    recentlyUnusedVegs,
   } = window.BabyFood;
 
   const KEY = 'babyfood:state:v1';
@@ -45,6 +51,10 @@
     if (!s.settings.recPerDay) s.settings.recPerDay = 2;
     s.batches.forEach((b) => { if (!b.cat) b.cat = catOfName(b.veg); });
     s.ingredients.forEach((i) => { if (!i.cat) i.cat = '野菜'; });
+    s.plan = s.plan || {};
+    s.plan.perDay = s.plan.perDay || s.settings.recPerDay || 2;
+    s.plan.horizonDays = s.plan.horizonDays || 7;
+    s.plan.days = s.plan.days || [];
     return s;
   }
 
@@ -310,6 +320,7 @@
   function renderAll() {
     renderIngredients();
     renderStock();
+    renderPlan();
     renderRecommend();
     renderLog();
     // 在庫が無くても「在庫にないもの」を記録できるため、常に押せる。
@@ -318,12 +329,277 @@
 
   /* ---------- タブ ---------- */
   function switchTab(t) {
-    const tabs = { ingredients: 'tab-ingredients', stock: 'tab-stock', log: 'tab-log' };
-    const views = { ingredients: 'view-ingredients', stock: 'view-stock', log: 'view-log' };
+    const tabs = { ingredients: 'tab-ingredients', stock: 'tab-stock', plan: 'tab-plan', log: 'tab-log' };
+    const views = { ingredients: 'view-ingredients', stock: 'view-stock', plan: 'view-plan', log: 'view-log' };
     for (const k in tabs) {
       $(tabs[k]).setAttribute('aria-selected', k === t);
       $(views[k]).hidden = k !== t;
     }
+  }
+
+  /* ---------- こんだて計画タブ ---------- */
+  const PLAN_SLOT_ICON = { 朝: '🌅', 昼: '🌞', 晩: '🌙' };
+  function planDayLabel(iso) {
+    const today = todayISO();
+    const diff = Math.round((new Date(iso + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const names = { 0: '今日', 1: '明日', 2: '明後日' };
+    const d = new Date(iso + 'T00:00:00');
+    const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    return (names[diff] || `${diff}日後`) + `（${d.getMonth() + 1}/${d.getDate()} ${w}）`;
+  }
+  // 計画の起点を今日にそろえ、必要なら作り直す（ピン留め・確定日は保持）。
+  function ensurePlanFresh() {
+    const today = todayISO();
+    const days = state.plan.days;
+    if (!days.length || days[0].date !== today) {
+      state.plan = buildPlan(state.batches, {
+        perDay: state.plan.perDay,
+        horizonDays: state.plan.horizonDays,
+        startDate: today,
+        uid,
+      }, state.plan);
+    }
+  }
+  function regenPlan() {
+    state.plan = buildPlan(state.batches, {
+      perDay: state.plan.perDay,
+      horizonDays: state.plan.horizonDays,
+      startDate: todayISO(),
+      uid,
+    }, state.plan);
+    save();
+    renderPlan();
+  }
+  function planChip(it, short, loc) {
+    const c = colorOf(it.veg);
+    const cls = 'plan-chip' + (it.pinned ? ' pinned' : '') + (short ? ' short' : '');
+    return `<span class="${cls}"><i class="dot" style="background:${c}"></i>${esc(it.veg)}${it.qty > 1 ? ' ×' + it.qty : ''}` +
+      `<button class="mini ${it.pinned ? 'on' : ''}" title="ピン留め" data-act="pin" data-loc="${loc}">📌</button>` +
+      `<button class="mini" title="削除" data-act="del" data-loc="${loc}">✕</button></span>`;
+  }
+  function renderPlan() {
+    ensurePlanFresh();
+    const el = $('view-plan');
+    const o = stockOutlook(state.batches, { perDay: state.plan.perDay, vegPerMeal: 3 });
+    const hasConfirmed = state.plan.days.some((d) => d.confirmed);
+    const reservedOutlook = hasConfirmed ? stockOutlook(reserveConfirmed(state.batches, state.plan), { perDay: state.plan.perDay }) : null;
+    const CAT_ICON2 = { 野菜: '🥕', タンパク質: '🍗', ごはん: '🍚' };
+
+    let html = `<div class="plan-outlook">
+      <div class="lab">今の在庫でつくれる見通し</div>
+      <div><span class="num">あと${o.meals}食</span> <span class="sub">／ ≒${o.days}日分</span></div>
+      ${reservedOutlook ? `<div class="reserved">確定分を引くと あと${reservedOutlook.meals}食</div>` : ''}
+    </div>`;
+    if (o.meals <= 0) {
+      html += `<div class="plan-bottleneck">⚠️ 在庫が足りません。「＋つくる」や買い物で補充しましょう</div>`;
+    } else {
+      html += `<div class="plan-bottleneck">⚠️ ${CAT_ICON2[o.bottleneck]} ${o.bottleneck}が先に不足（あと${o.perCat[o.bottleneck]}食ぶん）</div>`;
+    }
+
+    html += `<div class="rec-controls"><span>1日の回数</span><div class="seg seg-rec" id="planPer">
+      ${[1, 2, 3].map((n) => `<button data-act="per" data-v="${n}" aria-pressed="${n === state.plan.perDay}">${n}回</button>`).join('')}
+      </div><button class="plan-add" data-act="regen" style="margin-left:auto">↻ 作り直す</button></div>`;
+
+    // 在庫の引き当てを時系列で追いながら不足を判定する。
+    const avail = {};
+    state.batches.forEach((b) => { if (b.qty > 0) avail[b.veg] = (avail[b.veg] || 0) + b.qty; });
+
+    state.plan.days.forEach((day, di) => {
+      html += `<div class="plan-day-h">${planDayLabel(day.date)}${day.confirmed ? '<span class="badge b-fresh" style="margin-left:6px">確定</span>' : ''}
+        <button class="confirm ${day.confirmed ? 'on' : ''}" data-act="confirm" data-day="${di}">${day.confirmed ? '確定済み' : '確定する'}</button></div>`;
+      day.meals.forEach((m, mi) => {
+        html += `<div class="plan-meal ${day.confirmed ? 'confirmed' : ''}">
+          <div class="plan-meal-h"><span class="dot">${PLAN_SLOT_ICON[m.slot] || ''}</span>${m.slot}
+          ${m.servedMealId ? '<span class="served">✓ あげた</span>' : `<button class="serve-btn" data-act="serve" data-day="${di}" data-mid="${mi}">🥄 あげた</button>`}</div>
+          <div class="plan-chips">`;
+        m.items.forEach((it, ii) => {
+          const need = it.qty || 1;
+          let short = false;
+          if (!m.servedMealId) {
+            const have = avail[it.veg] || 0;
+            const use = Math.min(have, need);
+            avail[it.veg] = have - use;
+            short = use < need;
+          }
+          html += planChip(it, short, `${di}.${mi}.${ii}`);
+        });
+        html += `</div>
+          <div class="plan-add-row">
+            <button class="plan-add" data-act="add" data-day="${di}" data-mid="${mi}" data-cat="ごはん">＋ごはん</button>
+            <button class="plan-add" data-act="add" data-day="${di}" data-mid="${mi}" data-cat="タンパク質">＋タンパク質</button>
+            <button class="plan-add" data-act="add" data-day="${di}" data-mid="${mi}" data-cat="野菜">＋野菜</button>
+          </div></div>`;
+      });
+      html += `<button class="plan-add" data-act="addmeal" data-day="${di}" style="margin:2px 2px 4px">＋ 食事を追加</button>`;
+    });
+
+    // 買い物 / 作り置きリスト
+    const short = planShortfall(state.plan, state.batches);
+    const { buy, prep } = classifyShortfall(short, state.ingredients);
+    const unused = recentlyUnusedVegs(state.meals, PRESETS_BY_CAT['野菜'], { days: 14 })
+      .filter((v) => !buy.some((b) => b.veg === v) && !prep.some((p) => p.veg === v))
+      .slice(0, 3);
+
+    html += `<div class="cat-h" style="margin-top:20px"><span class="ic">🛒</span>買い物リスト</div>`;
+    if (!buy.length && !unused.length) {
+      html += `<div class="plan-list"><div class="plan-list-row" style="cursor:default"><span class="why">いまの計画に足りない買い物はありません</span></div></div>`;
+    } else {
+      html += `<div class="plan-list">`;
+      buy.forEach((b) => {
+        html += `<div class="plan-list-row" data-act="buy" data-veg="${esc(b.veg)}"><span class="ic">${CAT_ICON2[b.cat] || '🛒'}</span><div><div class="nm">${esc(b.veg)}${b.qty > 1 ? ' ×' + b.qty : ''}</div><div class="why">${b.reason}</div></div><span class="go">食材に追加 ›</span></div>`;
+      });
+      unused.forEach((v) => {
+        html += `<div class="plan-list-row" data-act="buy" data-veg="${esc(v)}"><span class="ic">🥕</span><div><div class="nm">${esc(v)}</div><div class="why">最近2週間 使っていない</div></div><span class="go">食材に追加 ›</span></div>`;
+      });
+      html += `</div>`;
+    }
+
+    html += `<div class="cat-h"><span class="ic">🍳</span>作り置きリスト</div>`;
+    if (!prep.length) {
+      html += `<div class="plan-list"><div class="plan-list-row" style="cursor:default"><span class="why">作り置きの提案はいまありません</span></div></div>`;
+    } else {
+      html += `<div class="plan-list">`;
+      prep.forEach((p) => {
+        html += `<div class="plan-list-row" data-act="prep" data-veg="${esc(p.veg)}"><span class="ic">${CAT_ICON2[p.cat] || '🍳'}</span><div><div class="nm">${esc(p.veg)}${p.qty > 1 ? ' ×' + p.qty : ''}をつくる</div><div class="why">${p.reason}</div></div><span class="go">つくる ›</span></div>`;
+      });
+      html += `</div>`;
+    }
+
+    html += `<p class="note" style="text-align:center">📌 ピン留め＝作り直しても残す　/　計画は予定です（在庫が減るのは「あげた」時）</p>`;
+    el.innerHTML = html;
+  }
+
+  /* ---------- 計画の操作 ---------- */
+  let servingFromPlan = null;
+  function planMealAt(di, mi) {
+    const d = state.plan.days[di];
+    return d ? d.meals[mi] : null;
+  }
+  function planTogglePin(loc) {
+    const [di, mi, ii] = loc.split('.').map(Number);
+    const m = planMealAt(di, mi);
+    if (!m || !m.items[ii]) return;
+    m.items[ii].pinned = !m.items[ii].pinned;
+    save();
+    renderPlan();
+  }
+  function planDelItem(loc) {
+    const [di, mi, ii] = loc.split('.').map(Number);
+    const m = planMealAt(di, mi);
+    if (!m) return;
+    m.items.splice(ii, 1);
+    save();
+    renderPlan();
+  }
+  function planConfirm(di) {
+    const d = state.plan.days[di];
+    if (!d) return;
+    d.confirmed = !d.confirmed;
+    save();
+    renderPlan();
+  }
+  function planAddMeal(di) {
+    const d = state.plan.days[di];
+    if (!d) return;
+    const slots = ['朝', '昼', '晩'];
+    const used = d.meals.map((m) => m.slot);
+    const slot = slots.find((s) => !used.includes(s)) || '昼';
+    d.meals.push({ id: uid(), slot, items: [], furikake: '', servedMealId: null });
+    save();
+    renderPlan();
+  }
+
+  // 計画の食事を「あげた」→ あげるシートを内容入りで開く（保存で実在庫が減る）。
+  function planServe(di, mid) {
+    const m = planMealAt(di, mid);
+    if (!m) return;
+    servingFromPlan = { di, mid };
+    openServe();
+    serveSlot = m.slot;
+    document.querySelectorAll('#serveSlot button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === serveSlot));
+    m.items.forEach((it) => {
+      let placed = false;
+      document.querySelectorAll('#serveList .serve-row').forEach((row) => {
+        if (row.dataset.veg === it.veg) {
+          const inp = row.querySelector('input');
+          const max = parseInt(inp.max, 10) || 0;
+          inp.value = Math.min(it.qty || 1, max);
+          placed = true;
+        }
+      });
+      if (!placed) {
+        const ex = directItems.find((d) => d.veg === it.veg);
+        if (ex) ex.qty += it.qty || 1;
+        else directItems.push({ veg: it.veg, qty: it.qty || 1 });
+      }
+    });
+    renderDirectChips();
+    $('serveFurikake').value = m.furikake || '';
+    serveTotal();
+  }
+
+  // 買い物→食材シート、作り置き→つくるシートを名前入りで開く。
+  function planBuy(veg) {
+    openIng();
+    $('ingName').value = veg;
+    document.querySelectorAll('#ingPicks .veg-pick').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === veg));
+  }
+  function planPrep(veg) {
+    openMake();
+    selectMakeCat(catOfName(veg));
+    let btn = null;
+    document.querySelectorAll('#makePicks .veg-pick').forEach((b) => { if (b.dataset.v === veg) btn = b; });
+    if (btn) pickMake(btn);
+    else $('makeCustom').value = veg;
+  }
+
+  /* ---------- 計画に追加するシート ---------- */
+  let planPickTarget = null;
+  let planPickCat = '野菜';
+  function renderPlanPickCat() {
+    $('planPickCat').innerHTML = CATS.map(
+      (c) => `<button data-v="${c.key}" aria-pressed="${c.key === planPickCat}">${c.icon} ${c.key}</button>`
+    ).join('');
+  }
+  function renderPlanPickList() {
+    const inStock = [...new Set(state.batches.filter((b) => b.qty > 0 && (b.cat || catOfName(b.veg)) === planPickCat).map((b) => b.veg))];
+    const presets = (PRESETS_BY_CAT[planPickCat] || []).filter((p) => !inStock.includes(p));
+    const list = [...inStock, ...presets];
+    $('planPickList').innerHTML =
+      list
+        .map(
+          (v) => `<button class="veg-pick" data-v="${esc(v)}"><i style="background:${colorOf(v)}"></i>${esc(v)}${inStock.includes(v) ? '' : ' <span style="color:var(--ink-soft);font-size:11px">(在庫なし)</span>'}</button>`
+        )
+        .join('') || `<span class="note" style="margin:0">候補がありません。下に入力してください。</span>`;
+  }
+  function openPlanPick(di, mid, cat) {
+    planPickTarget = { di, mid };
+    planPickCat = cat || '野菜';
+    renderPlanPickCat();
+    renderPlanPickList();
+    $('planPickCustom').value = '';
+    $('planPickQty').value = 1;
+    show('planPickScrim');
+  }
+  function savePlanPick() {
+    const veg = $('planPickCustom').value.trim();
+    const qty = Math.max(1, parseInt($('planPickQty').value, 10) || 1);
+    if (!veg) {
+      toast('食材を選んでね');
+      return;
+    }
+    const m = planPickTarget && planMealAt(planPickTarget.di, planPickTarget.mid);
+    if (!m) {
+      hide('planPickScrim');
+      return;
+    }
+    const ex = m.items.find((i) => i.veg === veg);
+    if (ex) ex.qty += qty;
+    else m.items.push({ veg, qty, pinned: true }); // 手で足した品はピン留めして保持
+    save();
+    renderPlan();
+    hide('planPickScrim');
+    toast(`${veg} を計画に追加`);
   }
 
   /* ---------- つくるシート ---------- */
@@ -619,7 +895,14 @@
     // 在庫がある分はFIFOで減らす（在庫に無い名前はそのままスキップされる）。
     state.batches = deductFIFO(state.batches, items);
     const furikake = $('serveFurikake').value.trim();
-    state.meals.push({ id: uid(), ts: Date.now(), slot: serveSlot, items, furikake });
+    const mealId = uid();
+    state.meals.push({ id: mealId, ts: Date.now(), slot: serveSlot, items, furikake });
+    // 計画から「あげた」場合は、その計画の食事に実績を紐付ける。
+    if (servingFromPlan) {
+      const pm = planMealAt(servingFromPlan.di, servingFromPlan.mid);
+      if (pm) pm.servedMealId = mealId;
+      servingFromPlan = null;
+    }
     save();
     renderAll();
     hide('serveScrim');
@@ -861,13 +1144,46 @@
       if (b) switchTab(b.dataset.tab);
     });
     $('makeBtn').addEventListener('click', () => openMake());
-    $('serveBtn').addEventListener('click', openServe);
+    $('serveBtn').addEventListener('click', () => { servingFromPlan = null; openServe(); });
     $('makeSave').addEventListener('click', saveMake);
     $('ingSave').addEventListener('click', saveIng);
     $('serveSave').addEventListener('click', saveServe);
     $('editSave').addEventListener('click', saveEditMeal);
     $('batchSave').addEventListener('click', saveEditBatch);
     $('batchDelete').addEventListener('click', deleteEditBatch);
+    $('planPickSave').addEventListener('click', savePlanPick);
+
+    // 計画タブ
+    $('view-plan').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const a = b.dataset.act;
+      if (a === 'regen') regenPlan();
+      else if (a === 'per') { state.plan.perDay = parseInt(b.dataset.v, 10); regenPlan(); }
+      else if (a === 'confirm') planConfirm(parseInt(b.dataset.day, 10));
+      else if (a === 'pin') planTogglePin(b.dataset.loc);
+      else if (a === 'del') planDelItem(b.dataset.loc);
+      else if (a === 'add') openPlanPick(parseInt(b.dataset.day, 10), parseInt(b.dataset.mid, 10), b.dataset.cat);
+      else if (a === 'addmeal') planAddMeal(parseInt(b.dataset.day, 10));
+      else if (a === 'serve') planServe(parseInt(b.dataset.day, 10), parseInt(b.dataset.mid, 10));
+      else if (a === 'buy') planBuy(b.dataset.veg);
+      else if (a === 'prep') planPrep(b.dataset.veg);
+    });
+    // 計画に追加するシート：カテゴリ・候補・名前入力
+    $('planPickCat').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      planPickCat = b.dataset.v;
+      renderPlanPickCat();
+      renderPlanPickList();
+    });
+    $('planPickList').addEventListener('click', (e) => {
+      const b = e.target.closest('.veg-pick');
+      if (b) {
+        $('planPickCustom').value = b.dataset.v;
+        document.querySelectorAll('#planPickList .veg-pick').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      }
+    });
 
     // 各シートのステッパー（数の増減）
     document.querySelectorAll('[data-step]').forEach((b) =>

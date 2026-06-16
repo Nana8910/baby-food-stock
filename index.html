@@ -42,11 +42,13 @@
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" id="tab-ingredients" aria-selected="false" data-tab="ingredients">食材</button>
         <button class="tab" role="tab" id="tab-stock" aria-selected="true" data-tab="stock">在庫</button>
-        <button class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">あげたきろく</button>
+        <button class="tab" role="tab" id="tab-plan" aria-selected="false" data-tab="plan">計画</button>
+        <button class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">きろく</button>
       </div>
 
       <div id="view-ingredients" hidden></div>
       <div id="view-stock"></div>
+      <div id="view-plan" hidden></div>
       <div id="view-log" hidden>
         <div id="recommendBox"></div>
         <div id="historyBox"></div>
@@ -192,6 +194,28 @@
         <input id="editFurikake" placeholder="例：青のり、ごま、ふりかけ" />
         <button class="save" id="editSave">保存する</button>
         <p class="note">数量を変えると、差の分だけ在庫を調整します（増やせば在庫から減り、減らせば在庫に戻ります）。0にすると、その食材はきろくから外れます。</p>
+      </div>
+    </div>
+
+    <!-- plan item picker sheet -->
+    <div class="scrim" id="planPickScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="計画に追加">
+        <div class="grab"></div>
+        <h2 id="planPickTitle">計画に追加</h2>
+        <label>カテゴリ</label>
+        <div class="seg seg-cat" id="planPickCat"></div>
+        <label>どれを入れる？</label>
+        <div class="picks" id="planPickList"></div>
+        <input id="planPickCustom" placeholder="リストにないものは ここに入力（在庫が無くてもOK）" style="margin-top: 10px" />
+        <label>個数</label>
+        <div class="stepper">
+          <button data-step="planPickQty" data-dir="-1" aria-label="へらす">−</button>
+          <input id="planPickQty" type="number" value="1" min="1" inputmode="numeric" />
+          <button data-step="planPickQty" data-dir="1" aria-label="ふやす">＋</button>
+          <span class="step-unit">個</span>
+        </div>
+        <button class="save" id="planPickSave">追加する</button>
+        <p class="note">在庫に無いものを入れると「不足」として、買い物リスト・作り置きリストに自動で出ます。</p>
       </div>
     </div>
 

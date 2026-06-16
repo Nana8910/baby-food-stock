@@ -217,6 +217,91 @@ test('countCompleteMenus: ごはん1＋タンパク質1＋野菜3 がそろう�
   assert.equal(batches[0].qty, 2);
 });
 
+test('stockOutlook: 食数・日数・ボトルネックを返す', () => {
+  const batches = [
+    { veg: '5倍がゆ', qty: 4, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { veg: '鶏ささみ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' }, // 律速
+    { veg: 'にんじん', qty: 3, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { veg: 'かぼちゃ', qty: 3, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+    { veg: 'ほうれん草', qty: 3, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  const o = BabyFood.stockOutlook(batches, { perDay: 2, vegPerMeal: 3 });
+  assert.equal(o.meals, 1); // タンパク質1が律速
+  assert.equal(o.bottleneck, 'タンパク質');
+  assert.equal(o.perCat['野菜'], 3); // 9個 /3
+  assert.equal(o.days, 0); // floor(1/2)
+});
+
+test('planShortfall + classifyShortfall: 在庫超過分を買い物/作り置きに振り分け', () => {
+  const batches = [{ veg: 'にんじん', qty: 1, made: '2026-06-09', store: '冷蔵', cat: '野菜' }];
+  const plan = {
+    days: [
+      { date: '2026-06-15', confirmed: false, meals: [
+        { id: 'm1', slot: '朝', items: [{ veg: 'にんじん', qty: 2 }, { veg: '鶏ささみ', qty: 1 }] },
+      ] },
+    ],
+  };
+  const short = BabyFood.planShortfall(plan, batches);
+  // にんじんは在庫1に対し2必要→不足1、鶏ささみは在庫0→不足1
+  const byVeg = Object.fromEntries(short.map((s) => [s.veg, s.qty]));
+  assert.equal(byVeg['にんじん'], 1);
+  assert.equal(byVeg['鶏ささみ'], 1);
+  // にんじんは食材タブに生在庫あり→作り置き、鶏ささみは無し→買い物
+  const cls = BabyFood.classifyShortfall(short, [{ name: 'にんじん', qty: 1 }]);
+  assert.deepEqual(cls.prep.map((x) => x.veg), ['にんじん']);
+  assert.deepEqual(cls.buy.map((x) => x.veg), ['鶏ささみ']);
+});
+
+test('planShortfall: あげた済み(servedMealId)の食事は除外', () => {
+  const plan = { days: [{ date: '2026-06-15', meals: [{ id: 'm', slot: '朝', servedMealId: 'x', items: [{ veg: 'にんじん', qty: 5 }] }] }] };
+  assert.equal(BabyFood.planShortfall(plan, []).length, 0);
+});
+
+test('reserveConfirmed: 確定済みの在庫品を控除した残りを返す', () => {
+  const batches = [{ id: 'a', veg: 'にんじん', qty: 3, made: '2026-06-09', store: '冷蔵', cat: '野菜' }];
+  const plan = { days: [
+    { date: '2026-06-15', confirmed: true, meals: [{ id: 'm', slot: '朝', items: [{ veg: 'にんじん', qty: 2 }] }] },
+    { date: '2026-06-16', confirmed: false, meals: [{ id: 'n', slot: '朝', items: [{ veg: 'にんじん', qty: 1 }] }] },
+  ] };
+  const left = BabyFood.reserveConfirmed(batches, plan);
+  assert.equal(left.find((b) => b.id === 'a').qty, 1); // 3 - 2(確定のみ)
+});
+
+test('recentlyUnusedVegs: 直近に使っていない野菜を返す', () => {
+  const NOW2 = '2026-06-20T10:00:00';
+  const meals = [
+    { ts: new Date('2026-06-19T08:00:00').getTime(), items: [{ veg: 'にんじん', qty: 1 }] }, // 最近使った
+    { ts: new Date('2026-06-01T08:00:00').getTime(), items: [{ veg: 'トマト', qty: 1 }] }, // 19日前
+  ];
+  const presets = ['にんじん', 'トマト', 'かぼちゃ'];
+  const r = BabyFood.recentlyUnusedVegs(meals, presets, { now: NOW2, days: 14 });
+  assert.deepEqual(r.sort(), ['かぼちゃ', 'トマト']); // にんじんは除外
+});
+
+test('buildPlan: 在庫から日別計画を作り、ピン留めと確定日を保持', () => {
+  const batches = [
+    { veg: '5倍がゆ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { veg: '鶏ささみ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+    { veg: 'にんじん', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  const plan = BabyFood.buildPlan(batches, { perDay: 1, horizonDays: 3, startDate: '2026-06-15', uid: () => 'id' });
+  assert.equal(plan.days.length, 3);
+  assert.equal(plan.days[0].date, '2026-06-15');
+  assert.equal(plan.days[2].date, '2026-06-17');
+  assert.ok(plan.days[0].meals[0].items.length >= 1);
+  // ピン留め＋確定の保持
+  const existing = {
+    days: [
+      { date: '2026-06-15', confirmed: true, meals: [{ id: 'k', slot: '朝', items: [{ veg: 'おかゆ', qty: 1, pinned: false }] }] },
+      { date: '2026-06-16', confirmed: false, meals: [{ id: 'p', slot: '朝', items: [{ veg: 'バナナ', qty: 1, pinned: true }] }] },
+    ],
+  };
+  const plan2 = BabyFood.buildPlan(batches, { perDay: 1, horizonDays: 3, startDate: '2026-06-15', uid: () => 'id' }, existing);
+  assert.equal(plan2.days[0].confirmed, true); // 確定日は丸ごと保持
+  assert.equal(plan2.days[0].meals[0].items[0].veg, 'おかゆ');
+  assert.ok(plan2.days[1].meals[0].items.some((i) => i.veg === 'バナナ' && i.pinned)); // ピン留めは残る
+});
+
 test('planMenus: complete（そろう献立数）を含めて返す', () => {
   const batches = [
     { id: 'r', veg: '5倍がゆ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },

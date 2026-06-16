@@ -583,6 +583,202 @@ header {
   color: var(--danger);
 }
 
+/* こんだて計画 */
+.plan-outlook {
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+}
+.plan-outlook .lab {
+  font-size: 12px;
+}
+.plan-outlook .num {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.1;
+}
+.plan-outlook .sub {
+  font-size: 13px;
+}
+.plan-outlook .reserved {
+  font-size: 11.5px;
+  opacity: 0.85;
+  margin-top: 3px;
+}
+.plan-bottleneck {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 10px;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+  font-weight: 500;
+}
+.plan-day-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink);
+  margin: 16px 2px 8px;
+}
+.plan-day-h .confirm {
+  margin-left: auto;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.plan-day-h .confirm.on {
+  border-color: var(--leaf);
+  background: var(--leaf);
+  color: #fff;
+}
+.plan-meal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 11px 13px;
+  margin-bottom: 9px;
+}
+.plan-meal.confirmed {
+  border-color: var(--leaf);
+}
+.plan-meal-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.plan-meal-h .served {
+  margin-left: auto;
+  color: var(--leaf-dark);
+  font-weight: 700;
+  font-family: "M PLUS Rounded 1c";
+}
+.plan-meal-h .serve-btn {
+  margin-left: auto;
+  border: 1.5px solid var(--leaf);
+  background: var(--leaf-soft);
+  color: var(--leaf-dark);
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+.plan-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+}
+.plan-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.plan-chip.pinned {
+  box-shadow: 0 0 0 1.5px var(--leaf) inset;
+}
+.plan-chip.short {
+  border: 1.4px dashed var(--danger);
+  color: var(--danger);
+}
+.plan-chip .mini {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-soft);
+  padding: 2px 3px;
+  border-radius: 6px;
+}
+.plan-chip .mini.on {
+  color: var(--leaf-dark);
+}
+.plan-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.plan-add {
+  border: 1.4px dashed var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 12px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.plan-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 4px 12px;
+  margin-bottom: 12px;
+}
+.plan-list-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.plan-list-row + .plan-list-row {
+  border-top: 1px dashed var(--line);
+}
+.plan-list-row .ic {
+  font-size: 16px;
+  flex: none;
+}
+.plan-list-row .nm {
+  font-family: "M PLUS Rounded 1c";
+  font-weight: 700;
+  font-size: 14px;
+}
+.plan-list-row .why {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.plan-list-row .go {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--leaf-dark);
+  font-weight: 700;
+  font-family: "M PLUS Rounded 1c";
+}
+
 .empty {
   text-align: center;
   color: var(--ink-soft);

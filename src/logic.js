@@ -356,6 +356,207 @@
     };
   }
 
+  /* ================= こんだて計画（plan） ================= */
+
+  /** プールから指定の野菜を qty 分だけ消費する（在庫の見通し計算用）。 */
+  function consumeFromPool(pools, veg, qty) {
+    const cat = catOfName(veg);
+    const arr = pools[cat];
+    if (!arr) return;
+    let need = qty;
+    for (const e of arr) {
+      if (need <= 0) break;
+      if (e.veg === veg) {
+        const take = Math.min(e.n, need);
+        e.n -= take;
+        need -= take;
+      }
+    }
+  }
+
+  /** 1食からカテゴリ別の代表（前食との重複回避に使う）を取り出す。 */
+  function mealPrev(meal) {
+    const items = (meal && meal.items) || [];
+    const r = items.find((i) => catOfName(i.veg) === 'ごはん');
+    const p = items.find((i) => catOfName(i.veg) === 'タンパク質');
+    const v = items.filter((i) => catOfName(i.veg) === '野菜').map((i) => i.veg);
+    return { rice: r ? r.veg : null, protein: p ? p.veg : null, veg: v };
+  }
+
+  /**
+   * 在庫の見通し。{ meals, days, bottleneck, perCat } を返す。
+   * meals = ごはん1＋タンパク質1＋野菜vegPerMeal がそろう食数（カテゴリの最少が律速）。
+   * bottleneck = 最初に尽きるカテゴリ。perCat = カテゴリ別に作れる食数。
+   */
+  function stockOutlook(batches, options) {
+    const opts = options || {};
+    const vegPerMeal = opts.vegPerMeal || 3;
+    const perDay = opts.perDay || 2;
+    const pools = buildPools(batches);
+    const sum = (cat) => (pools[cat] || []).reduce((s, e) => s + e.n, 0);
+    const perCat = {
+      ごはん: sum('ごはん'),
+      タンパク質: sum('タンパク質'),
+      野菜: Math.floor(sum('野菜') / vegPerMeal),
+    };
+    let bottleneck = 'ごはん';
+    let min = Infinity;
+    for (const k of ['ごはん', 'タンパク質', '野菜']) {
+      if (perCat[k] < min) {
+        min = perCat[k];
+        bottleneck = k;
+      }
+    }
+    const meals = Math.max(0, min);
+    return { meals, days: Math.floor(meals / perDay), bottleneck, perCat };
+  }
+
+  /**
+   * 在庫から数日分のこんだて計画を組む。在庫が尽きた分の枠は空のままにする
+   * （在庫に無いものは画面側で手動追加できる）。
+   * 既存計画の「ピン留め項目」と「確定済みの日」は保持する。元の batches は変更しない。
+   * options: { perDay, horizonDays, vegPerMeal=3, startDate:"YYYY-MM-DD", uid }
+   */
+  function buildPlan(batches, options, existing) {
+    const opts = options || {};
+    const perDay = opts.perDay || 2;
+    const horizon = opts.horizonDays || 7;
+    const VEG = opts.vegPerMeal || 3;
+    const uid = opts.uid || (() => Math.random().toString(36).slice(2, 10));
+    const exByDate = {};
+    ((existing && existing.days) || []).forEach((d) => (exByDate[d.date] = d));
+    const pools = buildPools(batches);
+    const startDate = atMidnight(opts.startDate);
+    const days = [];
+    let prev = { rice: null, protein: null, veg: [] };
+    for (let di = 0; di < horizon; di++) {
+      const dd = new Date(startDate);
+      dd.setDate(dd.getDate() + di);
+      const date = fmtISO(dd);
+      const ex = exByDate[date];
+      // 確定済みの日はそのまま保持し、在庫だけ先に消費しておく。
+      if (ex && ex.confirmed) {
+        (ex.meals || []).forEach((m) => (m.items || []).forEach((it) => consumeFromPool(pools, it.veg, it.qty || 1)));
+        days.push(ex);
+        const last = (ex.meals || [])[(ex.meals || []).length - 1];
+        if (last) prev = mealPrev(last);
+        continue;
+      }
+      const meals = [];
+      for (let mi = 0; mi < perDay; mi++) {
+        const exMeal = ex && ex.meals ? ex.meals[mi] : null;
+        const slot = exMeal ? exMeal.slot : ['朝', '昼', '晩'][mi % 3];
+        const pinned = exMeal ? (exMeal.items || []).filter((i) => i.pinned) : [];
+        pinned.forEach((it) => consumeFromPool(pools, it.veg, it.qty || 1));
+        const items = pinned.map((i) => ({ veg: i.veg, qty: i.qty || 1, pinned: true }));
+        const hasRice = items.some((i) => catOfName(i.veg) === 'ごはん');
+        const hasProt = items.some((i) => catOfName(i.veg) === 'タンパク質');
+        if (!hasRice) {
+          const r = takeOne(pools['ごはん'], [], prev.rice ? [prev.rice] : []);
+          if (r) items.push({ veg: r.veg, qty: 1, pinned: false });
+        }
+        if (!hasProt) {
+          const p = takeOne(pools['タンパク質'], [], prev.protein ? [prev.protein] : []);
+          if (p) items.push({ veg: p.veg, qty: 1, pinned: false });
+        }
+        const used = items.filter((i) => catOfName(i.veg) === '野菜').map((i) => i.veg);
+        for (let k = used.length; k < VEG; k++) {
+          const pick = takeOne(pools['野菜'], used, prev.veg);
+          if (!pick) break;
+          items.push({ veg: pick.veg, qty: 1, pinned: false });
+          used.push(pick.veg);
+        }
+        meals.push({
+          id: (exMeal && exMeal.id) || uid(),
+          slot,
+          items,
+          furikake: exMeal ? exMeal.furikake || '' : '',
+          servedMealId: exMeal ? exMeal.servedMealId || null : null,
+        });
+        prev = mealPrev(meals[meals.length - 1]);
+      }
+      days.push({ date, confirmed: false, meals });
+    }
+    return { perDay, horizonDays: horizon, days };
+  }
+
+  /**
+   * 計画が在庫を超えて必要とする分（＝不足）を野菜ごとに集計する。
+   * 古い日から順に在庫を引き当てる。すでに「あげた」食事は除く。
+   * options: { onlyConfirmed }
+   * 返り値: [{ veg, qty, cat }]
+   */
+  function planShortfall(plan, batches, options) {
+    const opts = options || {};
+    const avail = {};
+    (batches || []).forEach((b) => {
+      if (b.qty > 0) avail[b.veg] = (avail[b.veg] || 0) + b.qty;
+    });
+    const short = {};
+    for (const d of (plan && plan.days) || []) {
+      if (opts.onlyConfirmed && !d.confirmed) continue;
+      for (const m of d.meals || []) {
+        if (m.servedMealId) continue;
+        for (const it of m.items || []) {
+          const need = it.qty || 1;
+          const have = avail[it.veg] || 0;
+          const use = Math.min(have, need);
+          avail[it.veg] = have - use;
+          const lack = need - use;
+          if (lack > 0) {
+            if (!short[it.veg]) short[it.veg] = { veg: it.veg, qty: 0, cat: catOfName(it.veg) };
+            short[it.veg].qty += lack;
+          }
+        }
+      }
+    }
+    return Object.values(short);
+  }
+
+  /**
+   * 不足を「買い物（生の在庫が無い）」と「作り置き（食材タブに生在庫あり）」に振り分ける。
+   * 返り値: { buy: [...], prep: [...] }（各要素に reason を付与）
+   */
+  function classifyShortfall(shortfalls, ingredients) {
+    const ingNames = new Set((ingredients || []).filter((i) => i.qty > 0).map((i) => i.name));
+    const buy = [];
+    const prep = [];
+    for (const s of shortfalls || []) {
+      if (ingNames.has(s.veg)) prep.push({ ...s, reason: '食材タブに在庫あり' });
+      else buy.push({ ...s, reason: s.cat === '野菜' ? '生の在庫なし' : '在庫なし' });
+    }
+    return { buy, prep };
+  }
+
+  /** 確定済みの日の在庫品を「予約」として控除した残り batches を返す（元配列は不変）。 */
+  function reserveConfirmed(batches, plan) {
+    const items = [];
+    ((plan && plan.days) || []).forEach((d) => {
+      if (!d.confirmed) return;
+      (d.meals || []).forEach((m) => {
+        if (m.servedMealId) return;
+        (m.items || []).forEach((it) => items.push({ veg: it.veg, qty: it.qty || 1 }));
+      });
+    });
+    return deductFIFO(batches, items);
+  }
+
+  /** 直近 days 日であげていない野菜（presets のうち）を返す＝買い物の候補。 */
+  function recentlyUnusedVegs(meals, presets, options) {
+    const opts = options || {};
+    const span = opts.days || 14;
+    const base = opts.now ? new Date(opts.now) : new Date();
+    base.setHours(0, 0, 0, 0);
+    const cutoff = base.getTime() - span * 86400000;
+    const lastUsed = {};
+    (meals || []).forEach((m) => {
+      (m.items || []).forEach((it) => {
+        if (!lastUsed[it.veg] || m.ts > lastUsed[it.veg]) lastUsed[it.veg] = m.ts;
+      });
+    });
+    return (presets || []).filter((v) => lastUsed[v] == null || lastUsed[v] < cutoff);
+  }
+
   return {
     CATS,
     PRESETS_BY_CAT,
@@ -379,5 +580,11 @@
     buildPools,
     countCompleteMenus,
     planMenus,
+    stockOutlook,
+    buildPlan,
+    planShortfall,
+    classifyShortfall,
+    reserveConfirmed,
+    recentlyUnusedVegs,
   };
 });
