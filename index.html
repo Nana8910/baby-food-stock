@@ -218,6 +218,36 @@
       </div>
     </div>
 
+    <!-- prep (作り置き予定) sheet -->
+    <div class="scrim" id="prepScrim">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="作り置きの予定">
+        <div class="grab"></div>
+        <h2 id="prepTitle">作り置きを追加</h2>
+        <label>カテゴリ</label>
+        <div class="seg seg-cat" id="prepCat"></div>
+        <label>何をつくる？</label>
+        <div class="picks" id="prepPicks"></div>
+        <input id="prepCustom" placeholder="リストにないものは ここに入力" style="margin-top: 10px" />
+        <label>できる数</label>
+        <div class="stepper">
+          <button data-step="prepQty" data-dir="-1" aria-label="へらす">−</button>
+          <input id="prepQty" type="number" value="8" min="1" inputmode="numeric" />
+          <button data-step="prepQty" data-dir="1" aria-label="ふやす">＋</button>
+          <span class="step-unit">個</span>
+        </div>
+        <label>ほぞん方法</label>
+        <div class="seg" id="prepStore">
+          <button aria-pressed="true" data-v="冷蔵">冷蔵（れいぞう）</button>
+          <button aria-pressed="false" data-v="冷凍">冷凍（れいとう）</button>
+        </div>
+        <label>いつ作る？</label>
+        <input id="prepDate" type="date" />
+        <button class="save" id="prepSave">予定に追加</button>
+        <button class="save del-btn" id="prepDelete" hidden>この予定を削除</button>
+        <p class="note">予定を入れると、その日から在庫が増える前提で見通しに反映されます。実際に作ったら「つくった」で在庫に入ります。材料が食材タブに無いものは買い物予定に出ます。</p>
+      </div>
+    </div>
+
     <!-- edit stock (batch) sheet -->
     <div class="scrim" id="batchScrim">
       <div class="sheet" role="dialog" aria-modal="true" aria-label="ストックを編集">

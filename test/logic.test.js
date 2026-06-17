@@ -302,6 +302,40 @@ test('buildPlan: 在庫から日別計画を作り、ピン留めと確定日を
   assert.ok(plan2.days[1].meals[0].items.some((i) => i.veg === 'バナナ' && i.pinned)); // ピン留めは残る
 });
 
+test('buildForecast: 作り置き予定がその日から見通しに反映される', () => {
+  const batches = [
+    { veg: '5倍がゆ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },
+    { veg: '鶏ささみ', qty: 2, made: '2026-06-09', store: '冷凍', cat: 'タンパク質' },
+  ]; // 野菜は在庫ゼロ
+  const prep = [
+    { id: 'p1', date: '2026-06-15', veg: 'にんじん', qty: 3, store: '冷蔵', cat: '野菜' },
+    { id: 'p2', date: '2026-06-17', veg: 'かぼちゃ', qty: 3, store: '冷蔵', cat: '野菜' },
+  ];
+  const fc = BabyFood.buildForecast(batches, prep, { perDay: 1, horizonDays: 3, startDate: '2026-06-15', uid: () => 'id' });
+  // 初日：にんじん(当日から使える)が献立に入る
+  const day0veg = fc.days[0].meals[0].items.filter((i) => BabyFood.catOfName(i.veg) === '野菜').map((i) => i.veg);
+  assert.ok(day0veg.includes('にんじん'));
+  // かぼちゃは 06-17 からなので初日には入らない
+  assert.ok(!day0veg.includes('かぼちゃ'));
+  // doneBatchId 済みの予定は無視される
+  const fc2 = BabyFood.buildForecast(batches, [{ id: 'p1', date: '2026-06-15', veg: 'にんじん', qty: 3, store: '冷蔵', cat: '野菜', doneBatchId: 'x' }], { perDay: 1, horizonDays: 1, startDate: '2026-06-15', uid: () => 'id' });
+  const veg2 = fc2.days[0].meals[0].items.filter((i) => BabyFood.catOfName(i.veg) === '野菜');
+  assert.equal(veg2.length, 0);
+});
+
+test('prepAsBatches / shoppingForPrep: 作り置きから買い物を導く', () => {
+  const prep = [
+    { id: 'p1', date: '2026-06-15', veg: 'だいこん', qty: 8, store: '冷蔵', cat: '野菜' },
+    { id: 'p2', date: '2026-06-15', veg: 'ほうれん草', qty: 4, store: '冷蔵', cat: '野菜' },
+    { id: 'p3', date: '2026-06-15', veg: 'にんじん', qty: 2, store: '冷蔵', cat: '野菜', doneBatchId: 'b' }, // 実行済みは除外
+  ];
+  assert.equal(BabyFood.prepAsBatches(prep).length, 2); // 実行済み除外
+  const shop = BabyFood.shoppingForPrep(prep, [{ name: 'ほうれん草', qty: 1 }]);
+  // ほうれん草は食材タブにあるので買い物不要、だいこんは無いので買い物
+  assert.deepEqual(shop.map((s) => s.veg), ['だいこん']);
+  assert.equal(shop[0].qty, 8);
+});
+
 test('planMenus: complete（そろう献立数）を含めて返す', () => {
   const batches = [
     { id: 'r', veg: '5倍がゆ', qty: 1, made: '2026-06-09', store: '冷凍', cat: 'ごはん' },

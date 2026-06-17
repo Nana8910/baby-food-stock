@@ -557,6 +557,135 @@
     return (presets || []).filter((v) => lastUsed[v] == null || lastUsed[v] < cutoff);
   }
 
+  /**
+   * 作り置き予定（prep）を織り込んだ献立の見通しを日別に組む。
+   * 現在の在庫はその日から、作り置きは予定日から使える。確定日・ピン留めは保持。
+   * prep: [{ id, date, veg, qty, store, cat, doneBatchId? }]（doneBatchId 済みは無視）
+   * options: { perDay, horizonDays, vegPerMeal=3, startDate, uid }
+   */
+  function buildForecast(batches, prep, options, existing) {
+    const opts = options || {};
+    const perDay = opts.perDay || 2;
+    const horizon = opts.horizonDays || 7;
+    const VEG = opts.vegPerMeal || 3;
+    const uid = opts.uid || (() => Math.random().toString(36).slice(2, 10));
+    const start = opts.startDate;
+    const exByDate = {};
+    ((existing && existing.days) || []).forEach((d) => (exByDate[d.date] = d));
+
+    // from（その品が使えるようになる日）付きのプール。
+    const pools = { 野菜: [], タンパク質: [], ごはん: [] };
+    const add = (veg, store, made, n, from) => {
+      const cat = catOfName(veg);
+      (pools[cat] = pools[cat] || []).push({ veg, store, made, n, from });
+    };
+    (batches || []).forEach((b) => { if (b.qty > 0) add(b.veg, b.store, b.made, b.qty, start); });
+    (prep || []).forEach((p) => { if (!p.doneBatchId && (p.qty || 0) > 0) add(p.veg, p.store || '冷蔵', p.date, p.qty, p.date); });
+    for (const k in pools) {
+      pools[k].sort(
+        (a, b) => a.from.localeCompare(b.from) || (a.store === '冷蔵' ? 0 : 1) - (b.store === '冷蔵' ? 0 : 1) || a.made.localeCompare(b.made)
+      );
+    }
+    const takeDay = (pool, dayISO, avoidHard, avoidSoft) => {
+      if (!pool) return null;
+      avoidHard = avoidHard || [];
+      avoidSoft = avoidSoft || [];
+      let i = pool.findIndex((e) => e.n > 0 && e.from <= dayISO && !avoidHard.includes(e.veg) && !avoidSoft.includes(e.veg));
+      if (i < 0) i = pool.findIndex((e) => e.n > 0 && e.from <= dayISO && !avoidHard.includes(e.veg));
+      if (i < 0) return null;
+      pool[i].n--;
+      return pool[i];
+    };
+    const consumeDay = (veg, qty, dayISO) => {
+      const arr = pools[catOfName(veg)];
+      if (!arr) return;
+      let need = qty;
+      for (const e of arr) {
+        if (need <= 0) break;
+        if (e.veg === veg && e.from <= dayISO) {
+          const t = Math.min(e.n, need);
+          e.n -= t;
+          need -= t;
+        }
+      }
+    };
+
+    const sd = atMidnight(start);
+    const days = [];
+    let prev = { rice: null, protein: null, veg: [] };
+    for (let di = 0; di < horizon; di++) {
+      const dd = new Date(sd);
+      dd.setDate(dd.getDate() + di);
+      const date = fmtISO(dd);
+      const ex = exByDate[date];
+      if (ex && ex.confirmed) {
+        (ex.meals || []).forEach((m) => (m.items || []).forEach((it) => consumeDay(it.veg, it.qty || 1, date)));
+        days.push(ex);
+        const last = (ex.meals || []).slice(-1)[0];
+        if (last) prev = mealPrev(last);
+        continue;
+      }
+      const meals = [];
+      for (let mi = 0; mi < perDay; mi++) {
+        const exMeal = ex && ex.meals ? ex.meals[mi] : null;
+        const slot = exMeal ? exMeal.slot : ['朝', '昼', '晩'][mi % 3];
+        const pinned = exMeal ? (exMeal.items || []).filter((i) => i.pinned) : [];
+        pinned.forEach((it) => consumeDay(it.veg, it.qty || 1, date));
+        const items = pinned.map((i) => ({ veg: i.veg, qty: i.qty || 1, pinned: true }));
+        const hasRice = items.some((i) => catOfName(i.veg) === 'ごはん');
+        const hasProt = items.some((i) => catOfName(i.veg) === 'タンパク質');
+        if (!hasRice) {
+          const r = takeDay(pools['ごはん'], date, [], prev.rice ? [prev.rice] : []);
+          if (r) items.push({ veg: r.veg, qty: 1, pinned: false });
+        }
+        if (!hasProt) {
+          const p = takeDay(pools['タンパク質'], date, [], prev.protein ? [prev.protein] : []);
+          if (p) items.push({ veg: p.veg, qty: 1, pinned: false });
+        }
+        const used = items.filter((i) => catOfName(i.veg) === '野菜').map((i) => i.veg);
+        for (let k = used.length; k < VEG; k++) {
+          const pick = takeDay(pools['野菜'], date, used, prev.veg);
+          if (!pick) break;
+          items.push({ veg: pick.veg, qty: 1, pinned: false });
+          used.push(pick.veg);
+        }
+        meals.push({
+          id: (exMeal && exMeal.id) || uid(),
+          slot,
+          items,
+          furikake: exMeal ? exMeal.furikake || '' : '',
+          servedMealId: exMeal ? exMeal.servedMealId || null : null,
+        });
+        prev = mealPrev(meals[meals.length - 1]);
+      }
+      days.push({ date, confirmed: false, meals });
+    }
+    return { perDay, horizonDays: horizon, days };
+  }
+
+  /** 作り置き予定を実在庫相当の batches にする（見通しの合計食数の計算用）。 */
+  function prepAsBatches(prep) {
+    return (prep || [])
+      .filter((p) => !p.doneBatchId && (p.qty || 0) > 0)
+      .map((p) => ({ veg: p.veg, qty: p.qty, made: p.date, store: p.store || '冷蔵', cat: p.cat || catOfName(p.veg) }));
+  }
+
+  /**
+   * 作り置き予定のうち、食材タブに生在庫が無いもの＝買い物が必要なものを野菜ごとに集計。
+   * 返り値: [{ veg, qty, cat }]
+   */
+  function shoppingForPrep(prep, ingredients) {
+    const names = new Set((ingredients || []).filter((i) => i.qty > 0).map((i) => i.name));
+    const agg = {};
+    (prep || []).forEach((p) => {
+      if (p.doneBatchId || p.bought) return;
+      if (names.has(p.veg)) return;
+      if (!agg[p.veg]) agg[p.veg] = { veg: p.veg, qty: 0, cat: p.cat || catOfName(p.veg) };
+      agg[p.veg].qty += p.qty || 1;
+    });
+    return Object.values(agg);
+  }
+
   return {
     CATS,
     PRESETS_BY_CAT,
@@ -582,6 +711,9 @@
     planMenus,
     stockOutlook,
     buildPlan,
+    buildForecast,
+    prepAsBatches,
+    shoppingForPrep,
     planShortfall,
     classifyShortfall,
     reserveConfirmed,
