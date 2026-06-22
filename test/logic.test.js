@@ -323,6 +323,25 @@ test('buildForecast: 作り置き予定がその日から見通しに反映さ�
   assert.equal(veg2.length, 0);
 });
 
+test('planCoverage: 計画が在庫でいつまで足りるか', () => {
+  const batches = [
+    { veg: 'にんじん', qty: 2, made: '2026-06-09', store: '冷蔵', cat: '野菜' },
+  ];
+  const plan = { days: [
+    { date: '2026-06-15', meals: [{ id: 'a', slot: '朝', items: [{ veg: 'にんじん', qty: 1 }] }] }, // OK (残1)
+    { date: '2026-06-16', meals: [{ id: 'b', slot: '朝', items: [{ veg: 'にんじん', qty: 1 }] }] }, // OK (残0)
+    { date: '2026-06-17', meals: [{ id: 'c', slot: '朝', items: [{ veg: 'にんじん', qty: 1 }] }] }, // 不足
+  ] };
+  const cov = BabyFood.planCoverage(plan, batches);
+  assert.equal(cov.lastCoveredDate, '2026-06-16');
+  assert.equal(cov.firstShortDate, '2026-06-17');
+  assert.equal(cov.fullyCovered, false);
+  // 在庫十分なら全部カバー
+  const cov2 = BabyFood.planCoverage(plan, [{ veg: 'にんじん', qty: 9, made: '2026-06-09', store: '冷蔵', cat: '野菜' }]);
+  assert.equal(cov2.fullyCovered, true);
+  assert.equal(cov2.firstShortDate, null);
+});
+
 test('prepAsBatches / shoppingForPrep: 作り置きから買い物を導く', () => {
   const prep = [
     { id: 'p1', date: '2026-06-15', veg: 'だいこん', qty: 8, store: '冷蔵', cat: '野菜' },

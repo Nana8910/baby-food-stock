@@ -170,14 +170,14 @@
     <div class="scrim" id="editScrim">
       <div class="sheet" role="dialog" aria-modal="true" aria-label="きろくを編集">
         <div class="grab"></div>
-        <h2>きろくを編集</h2>
+        <h2 id="editTitle">きろくを編集</h2>
         <label>時間帯</label>
         <div class="seg" id="editSlot">
           <button data-v="朝" aria-pressed="false">🌅 朝</button>
           <button data-v="昼" aria-pressed="false">🌞 昼</button>
           <button data-v="晩" aria-pressed="false">🌙 晩</button>
         </div>
-        <label>あげたもの</label>
+        <label id="editListLabel">あげたもの</label>
         <div id="editList"></div>
         <label>追加する（任意）</label>
         <div class="direct-row">
@@ -192,7 +192,7 @@
         <label>ごはんのふりかけ（任意）</label>
         <input id="editFurikake" placeholder="例：青のり、ごま、ふりかけ" />
         <button class="save" id="editSave">保存する</button>
-        <p class="note">数量を変えると、差の分だけ在庫を調整します（増やせば在庫から減り、減らせば在庫に戻ります）。0にすると、その食材はきろくから外れます。</p>
+        <p class="note" id="editNote">数量を変えると、差の分だけ在庫を調整します（増やせば在庫から減り、減らせば在庫に戻ります）。0にすると、その食材はきろくから外れます。</p>
       </div>
     </div>
 

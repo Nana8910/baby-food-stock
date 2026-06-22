@@ -663,6 +663,39 @@
     return { perDay, horizonDays: horizon, days };
   }
 
+  /**
+   * 計画した献立を、在庫で「いつまで満たせるか」を判定する。
+   * 古い日から順に在庫を引き当て、ある日の品が1つでも足りなければその日が不足の起点。
+   * 返り値: { lastCoveredDate, firstShortDate, fullyCovered }（献立のある日だけを対象）
+   */
+  function planCoverage(plan, batches) {
+    const avail = {};
+    (batches || []).forEach((b) => { if (b.qty > 0) avail[b.veg] = (avail[b.veg] || 0) + b.qty; });
+    let lastCovered = null;
+    let firstShort = null;
+    for (const d of (plan && plan.days) || []) {
+      const hasMeals = (d.meals || []).some((m) => !m.servedMealId && (m.items || []).length);
+      let dayOk = true;
+      for (const m of d.meals || []) {
+        if (m.servedMealId) continue;
+        for (const it of m.items || []) {
+          const need = it.qty || 1;
+          const have = avail[it.veg] || 0;
+          const use = Math.min(have, need);
+          avail[it.veg] = have - use;
+          if (use < need) dayOk = false;
+        }
+      }
+      if (!hasMeals) continue;
+      if (dayOk) {
+        if (firstShort == null) lastCovered = d.date;
+      } else if (firstShort == null) {
+        firstShort = d.date;
+      }
+    }
+    return { lastCoveredDate: lastCovered, firstShortDate: firstShort, fullyCovered: firstShort == null };
+  }
+
   /** 作り置き予定を実在庫相当の batches にする（見通しの合計食数の計算用）。 */
   function prepAsBatches(prep) {
     return (prep || [])
@@ -712,6 +745,7 @@
     stockOutlook,
     buildPlan,
     buildForecast,
+    planCoverage,
     prepAsBatches,
     shoppingForPrep,
     planShortfall,
