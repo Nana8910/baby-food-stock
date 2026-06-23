@@ -28,9 +28,10 @@
     planMenus,
     stockOutlook,
     buildForecast,
+    planCoverage,
+    planShortfall,
     prepAsBatches,
     shoppingForPrep,
-    reserveConfirmed,
     recentlyUnusedVegs,
   } = window.BabyFood;
 
